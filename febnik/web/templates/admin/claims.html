@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Заявки — админка{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="toolbar">
+    <h1 style="margin:0; flex:1;">Заявки на призы</h1>
+    <a href="/admin/" class="btn btn-secondary btn-sm">Назад</a>
+  </div>
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>№</th><th>Статус</th><th>Участник</th><th>Приз</th><th>ФЭБ</th><th>Создана</th></tr>
+    </thead>
+    <tbody>
+      {% for c in claims %}
+      <tr>
+        <td>{{ c.id }}</td>
+        <td>{{ c.status.value }}</td>
+        <td>{% if c.user %}{{ c.user.full_name }}{% else %}—{% endif %}</td>
+        <td>{% if c.prize %}{{ c.prize.name }}{% else %}—{% endif %}</td>
+        <td>{{ c.cost_feb }}</td>
+        <td>{{ c.created_at }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endblock %}

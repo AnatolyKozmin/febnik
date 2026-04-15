@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Интерактивы — админка{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="toolbar">
+    <h1 style="margin:0; flex:1;">Интерактивы</h1>
+    <a href="/admin/activities/new" class="btn btn-sm">Добавить</a>
+    <a href="/admin/" class="btn btn-secondary btn-sm">Назад</a>
+  </div>
+  {% if not activities %}
+  <p class="muted">Пока пусто.</p>
+  {% else %}
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>Название</th><th>Дата</th><th>Время</th><th>ФЭБ</th><th>Ответственный</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for a in activities %}
+      <tr>
+        <td>{{ a.name }}</td>
+        <td>{% if a.event_date %}{{ a.event_date.strftime('%d.%m.%Y') }}{% else %}—{% endif %}</td>
+        <td>{{ a.time_text or '—' }}</td>
+        <td>{{ a.reward_feb }}</td>
+        <td>{% if a.responsible_username %}@{{ a.responsible_username }}{% else %}—{% endif %}</td>
+        <td class="row-actions">
+          <a href="/admin/activities/{{ a.id }}/edit" class="btn btn-sm">Изменить</a>
+          <form method="post" action="/admin/activities/{{ a.id }}/delete" style="display:inline;" onsubmit="return confirm('Удалить интерактив?');">
+            <button type="submit" class="btn btn-danger btn-sm">Удалить</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

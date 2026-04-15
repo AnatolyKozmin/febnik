@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Вход — админка{% endblock %}
+{% block content %}
+<div class="login-page">
+  <div class="login-card">
+    <div class="login-badge" aria-hidden="true">⚙</div>
+    <h1>Вход в админку</h1>
+    <p class="muted">Учётная запись выдаётся оргкомитету. Сессия сохраняется в браузере.</p>
+    <form method="post" action="/admin/login">
+      <label>Логин
+        <input type="text" name="username" required autocomplete="username" placeholder="admin">
+      </label>
+      <label>Пароль
+        <input type="password" name="password" required autocomplete="current-password" placeholder="••••••••">
+      </label>
+      <p style="margin-top:1.35rem;">
+        <button type="submit" class="btn" style="width:100%; max-width:none;">Войти</button>
+      </p>
+    </form>
+  </div>
+</div>
+{% endblock %}

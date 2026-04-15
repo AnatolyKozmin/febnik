@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Заявки на ФЭБ — админка{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="toolbar">
+    <h1 style="margin:0; flex:1;">Заявки на начисление ФЭБ</h1>
+    <a href="/admin/" class="btn btn-secondary btn-sm">Назад</a>
+  </div>
+  <p class="muted">Участники создают заявки командой <code>/request</code> в боте. Здесь можно одобрить (начислить на баланс) или отклонить.</p>
+
+  <h2>Ожидают решения</h2>
+  {% if not pending_rows %}
+  <p class="muted">Нет активных заявок.</p>
+  {% else %}
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>№</th><th>Участник</th><th>ФЭБ</th><th>Комментарий</th><th>Создана</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for b in pending_rows %}
+      <tr>
+        <td>{{ b.id }}</td>
+        <td>{{ b.user.full_name if b.user else '—' }} (tg {{ b.user.telegram_id if b.user else '—' }})</td>
+        <td>{{ b.amount_feb }}</td>
+        <td>{{ b.comment or '—' }}</td>
+        <td>{{ b.created_at }}</td>
+        <td class="row-actions">
+          <form method="post" action="/admin/balance-requests/{{ b.id }}/approve" style="display:inline;" onsubmit="return confirm('Начислить {{ b.amount_feb }} ФЭБ?');">
+            <button type="submit" class="btn btn-sm">Одобрить</button>
+          </form>
+          <form method="post" action="/admin/balance-requests/{{ b.id }}/reject" style="display:inline; margin-top:0.35rem;">
+            <input type="text" name="reason" placeholder="причина отказа" style="max-width:160px;">
+            <button type="submit" class="btn btn-danger btn-sm">Отклонить</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+
+  <h2 style="margin-top:1.5rem;">Недавние решения</h2>
+  {% if not history %}
+  <p class="muted">Пока пусто.</p>
+  {% else %}
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>№</th><th>Статус</th><th>Участник</th><th>ФЭБ</th><th>Комментарий</th><th>Решение</th></tr>
+    </thead>
+    <tbody>
+      {% for b in history %}
+      <tr>
+        <td>{{ b.id }}</td>
+        <td>{{ b.status.value }}</td>
+        <td>{{ b.user.full_name if b.user else '—' }}</td>
+        <td>{{ b.amount_feb }}</td>
+        <td>{{ b.comment or '—' }}</td>
+        <td>{{ b.resolved_at or '—' }} {% if b.reject_reason %} / {{ b.reject_reason }}{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

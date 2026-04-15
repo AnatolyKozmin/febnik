@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Админка — ФЭБник{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="toolbar">
+    <h1 style="margin:0; flex:1; min-width:0;">Панель управления</h1>
+    <a href="/admin/logout" class="btn btn-secondary btn-sm">Выйти</a>
+  </div>
+  <p class="muted" style="margin:0 0 0.5rem 0;">Сводка по боту и очередям заявок</p>
+  <div class="stat-grid">
+    <div class="stat">
+      <div class="stat-value">{{ users_count }}</div>
+      <div class="stat-label">Участников</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">{{ activities_count }}</div>
+      <div class="stat-label">Интерактивов</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">{{ prizes_count }}</div>
+      <div class="stat-label">Призов</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">{{ pending_claims }}</div>
+      <div class="stat-label">Призы ждут выдачи</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">{{ pending_balance_requests }}</div>
+      <div class="stat-label">Заявок на ФЭБ</div>
+    </div>
+  </div>
+  {% if pending_balance_requests > 0 or pending_claims > 0 %}
+  <p class="dashboard-quick muted" style="margin:1rem 0 0 0;">
+    {% if pending_balance_requests > 0 %}
+    <a href="/admin/balance-requests">Открыть заявки на начисление ФЭБ</a>
+    {% endif %}
+    {% if pending_balance_requests > 0 and pending_claims > 0 %} · {% endif %}
+    {% if pending_claims > 0 %}
+    <a href="/admin/claims">Заявки на призы</a>
+    {% endif %}
+  </p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>Разделы</h2>
+  <ul class="link-grid">
+    <li>
+      <a href="/admin/activities">
+        Интерактивы
+        <span class="desc">Расписание, награда, ответственный (@username)</span>
+      </a>
+    </li>
+    <li>
+      <a href="/admin/prizes">
+        Призы
+        <span class="desc">Цена в ФЭБ и остаток на стойке</span>
+      </a>
+    </li>
+    <li>
+      <a href="/admin/users">
+        Участники
+        <span class="desc">ФИО, username, баланс</span>
+      </a>
+    </li>
+    <li>
+      <a href="/admin/transactions">
+        Операции
+        <span class="desc">Последние движения по счетам</span>
+      </a>
+    </li>
+    <li>
+      <a href="/admin/claims">
+        Заявки на призы
+        <span class="desc">Оформлено через /claim в боте</span>
+      </a>
+    </li>
+    <li>
+      <a href="/admin/balance-requests">
+        Заявки на ФЭБ
+        <span class="desc">Командой /request в боте</span>
+      </a>
+    </li>
+    <li>
+      <a href="/admin/export/balances.csv">
+        Скачать CSV балансов
+        <span class="desc">Экспорт для таблиц</span>
+      </a>
+    </li>
+  </ul>
+</div>
+{% endblock %}

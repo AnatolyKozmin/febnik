@@ -1,0 +1,372 @@
+import csv
+import io
+from datetime import date, datetime
+from pathlib import Path
+
+from fastapi import APIRouter, Form, Request
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.templating import Jinja2Templates
+from sqlalchemy import func, select
+from sqlalchemy.orm import selectinload
+
+from febnik.config import get_settings
+from febnik.db.models import (
+    Activity,
+    BalanceRequest,
+    BalanceRequestStatus,
+    Claim,
+    ClaimStatus,
+    Prize,
+    Transaction,
+    User,
+)
+from febnik.services.balance import approve_balance_request, reject_balance_request
+from febnik.services.telegram_notify import send_user_message
+from febnik.web.deps import DbSession
+
+router = APIRouter()
+templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
+
+
+def _parse_date(s: str | None) -> date | None:
+    if not s or not str(s).strip():
+        return None
+    s = str(s).strip()
+    for fmt in ("%Y-%m-%d", "%d.%m.%Y"):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _ctx(request: Request, **extra: object):
+    flash = request.session.pop("flash", None)
+    base = {"request": request, "flash": flash, **extra}
+    return base
+
+
+@router.get("/admin/login", response_class=HTMLResponse)
+async def admin_login_get(request: Request) -> HTMLResponse:
+    if request.session.get("admin"):
+        return RedirectResponse(url="/admin/", status_code=302)
+    return templates.TemplateResponse("admin/login.html", _ctx(request))
+
+
+@router.post("/admin/login")
+async def admin_login_post(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+) -> RedirectResponse:
+    s = get_settings()
+    if username == s.admin_username and password == s.admin_password:
+        request.session["admin"] = True
+        request.session["flash"] = "Вход выполнен."
+        return RedirectResponse(url="/admin/", status_code=302)
+    request.session["flash"] = "Неверный логин или пароль."
+    return RedirectResponse(url="/admin/login", status_code=302)
+
+
+@router.get("/admin/logout")
+async def admin_logout(request: Request) -> RedirectResponse:
+    request.session.clear()
+    return RedirectResponse(url="/admin/login", status_code=302)
+
+
+@router.get("/admin/", response_class=HTMLResponse)
+async def admin_dashboard(request: Request, session: DbSession) -> HTMLResponse:
+    nu = await session.scalar(select(func.count(User.id)))
+    na = await session.scalar(select(func.count(Activity.id)))
+    np = await session.scalar(select(func.count(Prize.id)))
+    pending = await session.scalar(
+        select(func.count(Claim.id)).where(Claim.status == ClaimStatus.awaiting_handout)
+    )
+    pending_br = await session.scalar(
+        select(func.count(BalanceRequest.id)).where(BalanceRequest.status == BalanceRequestStatus.pending)
+    )
+    return templates.TemplateResponse(
+        "admin/dashboard.html",
+        _ctx(
+            request,
+            users_count=nu or 0,
+            activities_count=na or 0,
+            prizes_count=np or 0,
+            pending_claims=pending or 0,
+            pending_balance_requests=pending_br or 0,
+        ),
+    )
+
+
+@router.get("/admin/activities", response_class=HTMLResponse)
+async def admin_activities(request: Request, session: DbSession) -> HTMLResponse:
+    r = await session.execute(select(Activity).order_by(Activity.event_date.desc().nulls_last(), Activity.name))
+    rows = list(r.scalars().all())
+    return templates.TemplateResponse("admin/activities.html", _ctx(request, activities=rows))
+
+
+@router.get("/admin/activities/new", response_class=HTMLResponse)
+async def admin_activity_new_get(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse("admin/activity_form.html", _ctx(request, activity=None, title="Новый интерактив"))
+
+
+@router.post("/admin/activities/new")
+async def admin_activity_new_post(
+    request: Request,
+    session: DbSession,
+    name: str = Form(...),
+    reward_feb: int = Form(0),
+    event_date: str = Form(""),
+    time_text: str = Form(""),
+    responsible_username: str = Form(""),
+) -> RedirectResponse:
+    ru = responsible_username.strip().lstrip("@").lower() or None
+    a = Activity(
+        sheet_row=None,
+        name=name.strip(),
+        reward_feb=max(0, reward_feb),
+        event_date=_parse_date(event_date),
+        time_text=time_text.strip() or None,
+        responsible_username=ru,
+    )
+    session.add(a)
+    request.session["flash"] = "Интерактив создан."
+    return RedirectResponse(url="/admin/activities", status_code=302)
+
+
+@router.get("/admin/activities/{aid}/edit", response_class=HTMLResponse)
+async def admin_activity_edit_get(request: Request, session: DbSession, aid: int) -> HTMLResponse:
+    a = await session.get(Activity, aid)
+    if not a:
+        request.session["flash"] = "Не найдено."
+        return RedirectResponse(url="/admin/activities", status_code=302)
+    return templates.TemplateResponse(
+        "admin/activity_form.html",
+        _ctx(request, activity=a, title="Редактирование"),
+    )
+
+
+@router.post("/admin/activities/{aid}/edit")
+async def admin_activity_edit_post(
+    request: Request,
+    session: DbSession,
+    aid: int,
+    name: str = Form(...),
+    reward_feb: int = Form(0),
+    event_date: str = Form(""),
+    time_text: str = Form(""),
+    responsible_username: str = Form(""),
+) -> RedirectResponse:
+    a = await session.get(Activity, aid)
+    if not a:
+        request.session["flash"] = "Не найдено."
+        return RedirectResponse(url="/admin/activities", status_code=302)
+    ru = responsible_username.strip().lstrip("@").lower() or None
+    a.name = name.strip()
+    a.reward_feb = max(0, reward_feb)
+    a.event_date = _parse_date(event_date)
+    a.time_text = time_text.strip() or None
+    a.responsible_username = ru
+    request.session["flash"] = "Сохранено."
+    return RedirectResponse(url="/admin/activities", status_code=302)
+
+
+@router.post("/admin/activities/{aid}/delete")
+async def admin_activity_delete(request: Request, session: DbSession, aid: int) -> RedirectResponse:
+    a = await session.get(Activity, aid)
+    if a:
+        await session.delete(a)
+    request.session["flash"] = "Удалено."
+    return RedirectResponse(url="/admin/activities", status_code=302)
+
+
+@router.get("/admin/prizes", response_class=HTMLResponse)
+async def admin_prizes(request: Request, session: DbSession) -> HTMLResponse:
+    r = await session.execute(select(Prize).order_by(Prize.name))
+    rows = list(r.scalars().all())
+    return templates.TemplateResponse("admin/prizes.html", _ctx(request, prizes=rows))
+
+
+@router.get("/admin/prizes/new", response_class=HTMLResponse)
+async def admin_prize_new_get(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse("admin/prize_form.html", _ctx(request, prize=None, title="Новый приз"))
+
+
+@router.post("/admin/prizes/new")
+async def admin_prize_new_post(
+    request: Request,
+    session: DbSession,
+    name: str = Form(...),
+    cost_feb: int = Form(...),
+    stock: int = Form(0),
+) -> RedirectResponse:
+    p = Prize(sheet_row=None, name=name.strip(), cost_feb=max(0, cost_feb), stock=max(0, stock))
+    session.add(p)
+    request.session["flash"] = "Приз добавлен."
+    return RedirectResponse(url="/admin/prizes", status_code=302)
+
+
+@router.get("/admin/prizes/{pid}/edit", response_class=HTMLResponse)
+async def admin_prize_edit_get(request: Request, session: DbSession, pid: int) -> HTMLResponse:
+    p = await session.get(Prize, pid)
+    if not p:
+        request.session["flash"] = "Не найдено."
+        return RedirectResponse(url="/admin/prizes", status_code=302)
+    return templates.TemplateResponse("admin/prize_form.html", _ctx(request, prize=p, title="Редактирование приза"))
+
+
+@router.post("/admin/prizes/{pid}/edit")
+async def admin_prize_edit_post(
+    request: Request,
+    session: DbSession,
+    pid: int,
+    name: str = Form(...),
+    cost_feb: int = Form(...),
+    stock: int = Form(0),
+) -> RedirectResponse:
+    p = await session.get(Prize, pid)
+    if not p:
+        request.session["flash"] = "Не найдено."
+        return RedirectResponse(url="/admin/prizes", status_code=302)
+    p.name = name.strip()
+    p.cost_feb = max(0, cost_feb)
+    p.stock = max(0, stock)
+    request.session["flash"] = "Сохранено."
+    return RedirectResponse(url="/admin/prizes", status_code=302)
+
+
+@router.post("/admin/prizes/{pid}/delete")
+async def admin_prize_delete(request: Request, session: DbSession, pid: int) -> RedirectResponse:
+    p = await session.get(Prize, pid)
+    if not p:
+        request.session["flash"] = "Не найдено."
+        return RedirectResponse(url="/admin/prizes", status_code=302)
+    cnt = await session.scalar(select(func.count(Claim.id)).where(Claim.prize_id == pid))
+    if cnt and cnt > 0:
+        request.session["flash"] = "Нельзя удалить: есть заявки на этот приз."
+        return RedirectResponse(url="/admin/prizes", status_code=302)
+    await session.delete(p)
+    request.session["flash"] = "Удалено."
+    return RedirectResponse(url="/admin/prizes", status_code=302)
+
+
+@router.get("/admin/users", response_class=HTMLResponse)
+async def admin_users(request: Request, session: DbSession) -> HTMLResponse:
+    r = await session.execute(select(User).order_by(User.full_name))
+    rows = list(r.scalars().all())
+    return templates.TemplateResponse("admin/users.html", _ctx(request, users=rows))
+
+
+@router.get("/admin/transactions", response_class=HTMLResponse)
+async def admin_transactions(request: Request, session: DbSession) -> HTMLResponse:
+    r = await session.execute(
+        select(Transaction)
+        .options(selectinload(Transaction.user))
+        .order_by(Transaction.created_at.desc())
+        .limit(200)
+    )
+    rows = list(r.scalars().all())
+    return templates.TemplateResponse("admin/transactions.html", _ctx(request, transactions=rows))
+
+
+@router.get("/admin/claims", response_class=HTMLResponse)
+async def admin_claims(request: Request, session: DbSession) -> HTMLResponse:
+    r = await session.execute(
+        select(Claim)
+        .options(selectinload(Claim.user), selectinload(Claim.prize))
+        .order_by(Claim.created_at.desc())
+        .limit(100)
+    )
+    rows = list(r.scalars().all())
+    return templates.TemplateResponse("admin/claims.html", _ctx(request, claims=rows))
+
+
+@router.get("/admin/balance-requests", response_class=HTMLResponse)
+async def admin_balance_requests(request: Request, session: DbSession) -> HTMLResponse:
+    r1 = await session.execute(
+        select(BalanceRequest)
+        .options(selectinload(BalanceRequest.user))
+        .where(BalanceRequest.status == BalanceRequestStatus.pending)
+        .order_by(BalanceRequest.created_at)
+    )
+    pending_rows = list(r1.scalars().all())
+    r2 = await session.execute(
+        select(BalanceRequest)
+        .options(selectinload(BalanceRequest.user))
+        .where(BalanceRequest.status != BalanceRequestStatus.pending)
+        .order_by(BalanceRequest.resolved_at.desc().nulls_last(), BalanceRequest.id.desc())
+        .limit(80)
+    )
+    history = list(r2.scalars().all())
+    return templates.TemplateResponse(
+        "admin/balance_requests.html",
+        _ctx(request, pending_rows=pending_rows, history=history),
+    )
+
+
+@router.post("/admin/balance-requests/{rid}/approve")
+async def admin_balance_request_approve(request: Request, session: DbSession, rid: int) -> RedirectResponse:
+    req = await session.get(BalanceRequest, rid)
+    if not req:
+        request.session["flash"] = "Заявка не найдена."
+        return RedirectResponse(url="/admin/balance-requests", status_code=302)
+    try:
+        await approve_balance_request(session, req)
+        await session.flush()
+    except ValueError as e:
+        request.session["flash"] = str(e)
+        return RedirectResponse(url="/admin/balance-requests", status_code=302)
+    user = await session.get(User, req.user_id)
+    if user:
+        await send_user_message(
+            user.telegram_id,
+            f"Заявка №{rid} одобрена: начислено {req.amount_feb} ФЭБ. "
+            f"Ваш баланс: {user.balance_feb} ФЭБ.",
+        )
+    request.session["flash"] = f"Заявка №{rid} одобрена, участник уведомлён в Telegram."
+    return RedirectResponse(url="/admin/balance-requests", status_code=302)
+
+
+@router.post("/admin/balance-requests/{rid}/reject")
+async def admin_balance_request_reject(
+    request: Request,
+    session: DbSession,
+    rid: int,
+    reason: str = Form(""),
+) -> RedirectResponse:
+    req = await session.get(BalanceRequest, rid)
+    if not req:
+        request.session["flash"] = "Заявка не найдена."
+        return RedirectResponse(url="/admin/balance-requests", status_code=302)
+    try:
+        await reject_balance_request(session, req, reason)
+        await session.flush()
+    except ValueError as e:
+        request.session["flash"] = str(e)
+        return RedirectResponse(url="/admin/balance-requests", status_code=302)
+    user = await session.get(User, req.user_id)
+    if user:
+        text = f"Заявка №{rid} на {req.amount_feb} ФЭБ отклонена."
+        rr = (reason or "").strip()
+        if rr:
+            text += f" Комментарий: {rr}"
+        await send_user_message(user.telegram_id, text)
+    request.session["flash"] = f"Заявка №{rid} отклонена."
+    return RedirectResponse(url="/admin/balance-requests", status_code=302)
+
+
+@router.get("/admin/export/balances.csv")
+async def export_balances_csv(session: DbSession) -> Response:
+    r = await session.execute(select(User).order_by(User.full_name))
+    users = r.scalars().all()
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["ФИО", "username", "telegram_id", "balance_feb"])
+    for u in users:
+        w.writerow([u.full_name, u.username or "", u.telegram_id, u.balance_feb])
+    data = buf.getvalue().encode("utf-8-sig")
+    return Response(
+        content=data,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="balances.csv"'},
+    )

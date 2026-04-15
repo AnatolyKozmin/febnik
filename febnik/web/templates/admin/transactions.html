@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Операции — админка{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="toolbar">
+    <h1 style="margin:0; flex:1;">Последние операции</h1>
+    <a href="/admin/" class="btn btn-secondary btn-sm">Назад</a>
+  </div>
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>Время</th><th>Участник</th><th>Δ</th><th>После</th><th>Тип</th><th>Комментарий</th></tr>
+    </thead>
+    <tbody>
+      {% for t in transactions %}
+      <tr>
+        <td>{{ t.created_at }}</td>
+        <td>{% if t.user %}{{ t.user.full_name }}{% else %}—{% endif %}</td>
+        <td>{{ t.delta }}</td>
+        <td>{{ t.balance_after }}</td>
+        <td>{{ t.kind.value }}</td>
+        <td>{{ t.note or '' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endblock %}

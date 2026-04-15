@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Участники — админка{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="toolbar">
+    <h1 style="margin:0; flex:1;">Участники</h1>
+    <a href="/admin/" class="btn btn-secondary btn-sm">Назад</a>
+  </div>
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>ФИО</th><th>Username</th><th>Telegram ID</th><th>ФЭБ</th></tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td>{{ u.full_name }}</td>
+        <td>@{{ u.username or '—' }}</td>
+        <td>{{ u.telegram_id }}</td>
+        <td>{{ u.balance_feb }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endblock %}

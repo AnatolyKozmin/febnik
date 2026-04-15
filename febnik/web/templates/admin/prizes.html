@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Призы — админка{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="toolbar">
+    <h1 style="margin:0; flex:1;">Призы</h1>
+    <a href="/admin/prizes/new" class="btn btn-sm">Добавить</a>
+    <a href="/admin/" class="btn btn-secondary btn-sm">Назад</a>
+  </div>
+  {% if not prizes %}
+  <p class="muted">Пока пусто.</p>
+  {% else %}
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>Название</th><th>Цена, ФЭБ</th><th>Остаток</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for p in prizes %}
+      <tr>
+        <td>{{ p.name }}</td>
+        <td>{{ p.cost_feb }}</td>
+        <td>{{ p.stock }}</td>
+        <td class="row-actions">
+          <a href="/admin/prizes/{{ p.id }}/edit" class="btn btn-sm">Изменить</a>
+          <form method="post" action="/admin/prizes/{{ p.id }}/delete" style="display:inline;" onsubmit="return confirm('Удалить приз?');">
+            <button type="submit" class="btn btn-danger btn-sm">Удалить</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

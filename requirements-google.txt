@@ -1,0 +1,4 @@
+# Опционально: синхронизация с Google Таблицами (команды /sync, лог в таблицу)
+-r requirements.txt
+gspread==6.1.4
+google-auth==2.36.0

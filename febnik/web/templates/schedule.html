@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Расписание — ФЭБник{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="toolbar">
+    <h1 style="margin:0; flex:1; min-width:0;">Интерактивы</h1>
+    <a href="/" class="btn btn-secondary btn-sm">Назад</a>
+  </div>
+  {% if empty_today %}
+  <p class="muted">На сегодня ({{ today.strftime('%d.%m.%Y') }}) в базе нет строк с этой датой — ниже все загруженные позиции.</p>
+  {% else %}
+  <p class="muted">Дата «сегодня» в базе: {{ today.strftime('%d.%m.%Y') }}</p>
+  {% endif %}
+  {% if not activities %}
+  <p>Пока пусто. Оргкомитет добавит расписание в админке.</p>
+  {% else %}
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>Название</th><th>Дата</th><th>Время</th><th>Награда, ФЭБ</th></tr>
+    </thead>
+    <tbody>
+      {% for a in activities %}
+      <tr>
+        <td>{{ a.name }}</td>
+        <td>{% if a.event_date %}{{ a.event_date.strftime('%d.%m.%Y') }}{% else %}—{% endif %}</td>
+        <td>{{ a.time_text or '—' }}</td>
+        <td>{{ a.reward_feb }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

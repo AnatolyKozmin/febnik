@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Призы — ФЭБник{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="toolbar">
+    <h1 style="margin:0; flex:1; min-width:0;">Призы</h1>
+    <a href="/" class="btn btn-secondary btn-sm">Назад</a>
+  </div>
+  <p class="muted">Стоимость в ФЭБартах. Оформление — в Telegram-боте командой /claim.</p>
+  {% if not prizes %}
+  <p>Призов пока нет.</p>
+  {% else %}
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>Название</th><th>Цена, ФЭБ</th><th>Остаток</th></tr>
+    </thead>
+    <tbody>
+      {% for p in prizes %}
+      <tr>
+        <td>{{ p.name }}</td>
+        <td>{{ p.cost_feb }}</td>
+        <td>{{ p.stock }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

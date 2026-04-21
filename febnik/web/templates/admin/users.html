@@ -6,10 +6,11 @@
     <h1 style="margin:0; flex:1;">Участники</h1>
     <a href="/admin/" class="btn btn-secondary btn-sm">Назад</a>
   </div>
+  <p class="muted" style="margin:0 0 0.75rem 0;">Баланс можно изменить вручную: введите новое значение и нажмите «Сохранить».</p>
   <div class="table-wrap">
   <table>
     <thead>
-      <tr><th>ФИО</th><th>Username</th><th>Telegram ID</th><th>ФЭБ</th></tr>
+      <tr><th>ФИО</th><th>Username</th><th>Telegram ID</th><th>Баланс ФЭБ</th></tr>
     </thead>
     <tbody>
       {% for u in users %}
@@ -17,7 +18,12 @@
         <td>{{ u.full_name }}</td>
         <td>@{{ u.username or '—' }}</td>
         <td>{{ u.telegram_id }}</td>
-        <td>{{ u.balance_feb }}</td>
+        <td>
+          <form method="post" action="/admin/users/{{ u.id }}/set-balance" style="display:flex;flex-wrap:wrap;align-items:center;gap:0.4rem;">
+            <input type="number" name="new_balance" value="{{ u.balance_feb }}" min="0" max="99999999" required step="1" style="width:6rem;padding:0.35rem 0.5rem;border-radius:8px;border:1px solid var(--border);">
+            <button type="submit" class="btn btn-secondary btn-sm">Сохранить</button>
+          </form>
+        </td>
       </tr>
       {% endfor %}
     </tbody>

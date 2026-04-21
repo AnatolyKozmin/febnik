@@ -16,8 +16,12 @@ class Settings(BaseSettings):
     telegram_request_timeout: float = 120.0
     telegram_proxy: str | None = None
 
-    # Заявка /request: максимум ФЭБ за одну заявку
+    # Заявка на ФЭБ с сайта (/cabinet/request). Заявки из бота (/request) не зависят от этого.
+    web_balance_request_enabled: bool = False
+    # Заявка /request (бот): максимум ФЭБ за одну заявку
     max_balance_request_feb: int = 5000
+    # Начисление по QR (интерактив): верхняя граница суммы за одно действие
+    max_qr_award_feb: int = 10000
 
     google_credentials_path: str | None = None
     google_spreadsheet_id: str | None = None

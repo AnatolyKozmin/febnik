@@ -140,6 +140,9 @@ async def cabinet_claim(
 
 @router.get("/cabinet/request", response_class=HTMLResponse)
 async def cabinet_request_get(request: Request, session: DbSession) -> Response:
+    if not get_settings().web_balance_request_enabled:
+        request.session["flash_cabinet"] = "Заявки на начисление ФЭБ с сайта отключены."
+        return RedirectResponse(url="/cabinet", status_code=302)
     user = await _load_participant(session, request)
     if not user or not is_web_user(user):
         return RedirectResponse(url="/join", status_code=302)
@@ -158,6 +161,8 @@ async def cabinet_request_post(
     amount_feb: int = Form(...),
     comment: str = Form(""),
 ) -> RedirectResponse:
+    if not get_settings().web_balance_request_enabled:
+        return RedirectResponse(url="/cabinet", status_code=302)
     user = await _load_participant(session, request)
     if not user or not is_web_user(user):
         return RedirectResponse(url="/join", status_code=302)

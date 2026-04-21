@@ -23,12 +23,17 @@ from febnik.db.models import (
     Transaction,
     User,
 )
-from febnik.services.balance import apply_interactive_reward, approve_balance_request, reject_balance_request
+from febnik.services.balance import (
+    apply_admin_balance_set,
+    apply_interactive_reward,
+    approve_balance_request,
+    reject_balance_request,
+)
 from febnik.services.qr_token import parse_participant_scan_token
 from febnik.services.sheets import append_log_row_async
 from febnik.services.telegram_notify import send_user_message
 from febnik.services.user_web import is_web_user
-from febnik.web.deps import DbSession
+from febnik.web.deps import DbSession, panel_base_url
 
 logger = logging.getLogger(__name__)
 
@@ -110,9 +115,11 @@ async def admin_award_from_qr(
     session: DbSession,
     t: str = Form(...),
     activity_id: int = Form(...),
+    amount_feb: str = Form(""),
 ) -> RedirectResponse:
     if not request.session.get("admin"):
         return RedirectResponse(url="/admin/login", status_code=302)
+    settings = get_settings()
     uid = parse_participant_scan_token(t.strip())
     if uid is None:
         request.session["flash"] = "Недействительная ссылка начисления."
@@ -126,7 +133,30 @@ async def admin_award_from_qr(
         request.session["flash"] = "Интерактив не найден."
         return RedirectResponse(url="/admin/", status_code=302)
 
-    tx = await apply_interactive_reward(session, user, act.reward_feb, act.id, note=f"Интерактив: {act.name} (QR)")
+    raw = (amount_feb or "").strip()
+    if raw:
+        try:
+            award_amount = int(raw)
+        except ValueError:
+            request.session["flash"] = "Укажите целое число ФЭБ."
+            return RedirectResponse(url="/admin/", status_code=302)
+    else:
+        award_amount = act.reward_feb
+
+    if award_amount < 1:
+        request.session["flash"] = "Сумма начисления должна быть не меньше 1 ФЭБ."
+        return RedirectResponse(url="/admin/", status_code=302)
+    if award_amount > settings.max_qr_award_feb:
+        request.session["flash"] = f"Слишком много: максимум {settings.max_qr_award_feb} ФЭБ за одно начисление."
+        return RedirectResponse(url="/admin/", status_code=302)
+
+    tx = await apply_interactive_reward(
+        session,
+        user,
+        award_amount,
+        act.id,
+        note=f"Интерактив: {act.name} (QR), заявлено {award_amount} ФЭБ",
+    )
     await session.flush()
     settings = get_settings()
     try:
@@ -145,7 +175,7 @@ async def admin_award_from_qr(
         logger.exception("sheets log (award QR)")
 
     request.session["flash"] = (
-        f"Начислено {act.reward_feb} ФЭБ участнику {user.full_name} за «{act.name}». Баланс: {user.balance_feb}."
+        f"Начислено {award_amount} ФЭБ участнику {user.full_name} за «{act.name}». Баланс: {user.balance_feb}."
     )
     return RedirectResponse(url="/admin/", status_code=302)
 
@@ -161,6 +191,7 @@ async def admin_dashboard(request: Request, session: DbSession) -> HTMLResponse:
     pending_br = await session.scalar(
         select(func.count(BalanceRequest.id)).where(BalanceRequest.status == BalanceRequestStatus.pending)
     )
+    settings = get_settings()
     return templates.TemplateResponse(
         "admin/dashboard.html",
         _ctx(
@@ -170,7 +201,18 @@ async def admin_dashboard(request: Request, session: DbSession) -> HTMLResponse:
             prizes_count=np or 0,
             pending_claims=pending or 0,
             pending_balance_requests=pending_br or 0,
+            panel_url=panel_base_url(),
+            bot_enabled=settings.bot_enabled,
         ),
+    )
+
+
+@router.get("/admin/scan", response_class=HTMLResponse)
+async def admin_scan_page(request: Request) -> HTMLResponse:
+    """Точка входа «сканера»: вставить ссылку из QR участника или токен t."""
+    return templates.TemplateResponse(
+        "admin/scan.html",
+        _ctx(request, panel_url=panel_base_url()),
     )
 
 
@@ -331,6 +373,47 @@ async def admin_users(request: Request, session: DbSession) -> HTMLResponse:
     r = await session.execute(select(User).order_by(User.full_name))
     rows = list(r.scalars().all())
     return templates.TemplateResponse("admin/users.html", _ctx(request, users=rows))
+
+
+@router.post("/admin/users/{uid}/set-balance")
+async def admin_user_set_balance(
+    request: Request,
+    session: DbSession,
+    uid: int,
+    new_balance: int = Form(...),
+) -> RedirectResponse:
+    user = await session.get(User, uid)
+    if not user:
+        request.session["flash"] = "Участник не найден."
+        return RedirectResponse(url="/admin/users", status_code=302)
+    try:
+        tx = await apply_admin_balance_set(session, user, new_balance)
+        await session.flush()
+    except ValueError as e:
+        request.session["flash"] = str(e)
+        return RedirectResponse(url="/admin/users", status_code=302)
+    settings = get_settings()
+    if tx:
+        try:
+            await append_log_row_async(
+                settings,
+                when=datetime.now(timezone.utc),
+                telegram_id=user.telegram_id,
+                username=user.username,
+                full_name=user.full_name,
+                delta=tx.delta,
+                balance_after=tx.balance_after,
+                kind="admin_adjust",
+                note=tx.note or "",
+            )
+        except Exception:
+            logger.exception("sheets log (admin balance set)")
+        request.session["flash"] = (
+            f"Баланс {user.full_name}: {user.balance_feb} ФЭБ (изменение {tx.delta:+d})."
+        )
+    else:
+        request.session["flash"] = "Значение не изменилось."
+    return RedirectResponse(url="/admin/users", status_code=302)
 
 
 @router.get("/admin/transactions", response_class=HTMLResponse)

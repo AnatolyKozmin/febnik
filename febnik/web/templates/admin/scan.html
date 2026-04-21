@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% block title %}Сканер QR — админка{% endblock %}
+{% block content %}
+<style>
+  .scan-page { max-width: 520px; margin: 0 auto; }
+  .scan-hero {
+    text-align: center;
+    margin-bottom: 1.25rem;
+  }
+  .scan-hero h1 {
+    margin: 0 0 0.35rem 0;
+    font-size: 1.35rem;
+    letter-spacing: -0.02em;
+  }
+  .scan-hero p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 1.45; }
+  #qr-reader {
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    background: #0d1a12;
+    min-height: 280px;
+  }
+  #qr-reader video {
+    border-radius: var(--radius);
+  }
+  .scan-hint {
+    margin-top: 0.85rem;
+    font-size: 0.88rem;
+    color: var(--muted);
+    text-align: center;
+    line-height: 1.4;
+  }
+  .scan-fallback {
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+  }
+  .scan-fallback summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--accent);
+    margin-bottom: 0.75rem;
+    list-style: none;
+  }
+  .scan-fallback summary::-webkit-details-marker { display: none; }
+  .scan-status {
+    margin-top: 0.75rem;
+    padding: 0.65rem 0.85rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    display: none;
+  }
+  .scan-status.is-error {
+    display: block;
+    background: rgba(180, 35, 24, 0.08);
+    color: var(--danger);
+    border: 1px solid rgba(180, 35, 24, 0.2);
+  }
+  .scan-status.is-ok {
+    display: block;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border: 1px solid rgba(27, 94, 58, 0.2);
+  }
+  /* html5-qrcode overrides */
+  #qr-reader__dashboard_section_csr button,
+  #qr-reader__dashboard_section_swaplink {
+    border-radius: var(--radius-sm) !important;
+  }
+  #qr-reader__scan_region {
+    background: #0d1a12 !important;
+  }
+</style>
+
+<div class="card scan-page">
+  <div class="toolbar">
+    <a href="/admin/" class="btn btn-secondary btn-sm">← Панель</a>
+  </div>
+
+  <div class="scan-hero">
+    <h1>Сканер билета</h1>
+    <p>Наведите камеру на QR участника — откроется начисление ФЭБ. Нужны права организатора и доступ к камере (HTTPS или localhost).</p>
+  </div>
+
+  <div id="scan-status" class="scan-status" role="status" aria-live="polite"></div>
+
+  <div id="qr-reader"></div>
+  <p class="scan-hint">Код тот же, что в «Мой QR» в кабинете: <code style="font-size:0.8rem;">{{ panel_url }}/scan?t=…</code></p>
+
+  <details class="scan-fallback">
+    <summary>Нет камеры или не читается — вставить вручную</summary>
+    <label for="raw" style="display:block; margin-bottom:0.35rem; font-weight:600; font-size:0.92rem;">Ссылка или токен</label>
+    <input type="text" id="raw" autocomplete="off" placeholder="https://…/scan?t=… или длинный код" style="width:100%; padding:0.55rem 0.7rem; border-radius:10px; border:1px solid var(--border); font-family: inherit; font-size:0.95rem;">
+    <p style="margin-top:0.65rem; display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center;">
+      <button type="button" class="btn" id="go-scan">Открыть начисление</button>
+    </p>
+  </details>
+</div>
+
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" crossorigin="anonymous"></script>
+<script>
+(function () {
+  function extractToken(text) {
+    text = (text || "").trim();
+    if (!text) return null;
+    if (/^https?:\/\//i.test(text) || text.indexOf("/scan") !== -1) {
+      try {
+        var u = new URL(text, window.location.origin);
+        var t = u.searchParams.get("t");
+        if (t) return t.trim();
+      } catch (e) {}
+    }
+    var q = text.indexOf("t=");
+    if (q !== -1) {
+      var rest = text.slice(q + 2);
+      var amp = rest.indexOf("&");
+      if (amp !== -1) rest = rest.slice(0, amp);
+      try { return decodeURIComponent(rest.trim()); } catch (e) { return rest.trim(); }
+    }
+    return text;
+  }
+
+  function goToScan(token) {
+    if (!token) return;
+    window.location.href = "/scan?t=" + encodeURIComponent(token);
+  }
+
+  function showStatus(msg, ok) {
+    var el = document.getElementById("scan-status");
+    if (!el) return;
+    el.textContent = msg;
+    el.className = "scan-status " + (ok ? "is-ok" : "is-error");
+  }
+
+  function hideStatus() {
+    var el = document.getElementById("scan-status");
+    if (!el) return;
+    el.className = "scan-status";
+    el.textContent = "";
+  }
+
+  /* Ручной ввод */
+  var raw = document.getElementById("raw");
+  var goBtn = document.getElementById("go-scan");
+  function manualGo() {
+    hideStatus();
+    var t = extractToken(raw && raw.value);
+    if (!t) {
+      showStatus("Вставьте ссылку или код из QR.", false);
+      return;
+    }
+    showStatus("Открываем…", true);
+    goToScan(t);
+  }
+  if (goBtn) goBtn.addEventListener("click", manualGo);
+  if (raw) raw.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); manualGo(); }
+  });
+
+  /* Камера: Html5QrcodeScanner */
+  if (typeof Html5QrcodeScanner === "undefined") {
+    showStatus("Не удалось загрузить модуль сканера. Проверьте сеть или вставьте ссылку вручную.", false);
+    return;
+  }
+
+  var scanner = new Html5QrcodeScanner(
+    "qr-reader",
+    {
+      fps: 12,
+      qrbox: { width: 280, height: 280 },
+      aspectRatio: 1,
+      rememberLastUsedCamera: true,
+      showTorchButtonIfSupported: true,
+    },
+    false
+  );
+
+  var done = false;
+  function onScanSuccess(decodedText) {
+    if (done) return;
+    var t = extractToken(decodedText);
+    if (!t) return;
+    done = true;
+    if (navigator.vibrate) try { navigator.vibrate(35); } catch (e) {}
+    showStatus("Код получен, открываем начисление…", true);
+    scanner.clear()
+      .then(function () { goToScan(t); })
+      .catch(function () { goToScan(t); });
+  }
+
+  function onScanFailure() {}
+
+  scanner.render(onScanSuccess, onScanFailure);
+})();
+</script>
+{% endblock %}

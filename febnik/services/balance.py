@@ -49,6 +49,31 @@ async def apply_interactive_reward(
     return tx
 
 
+async def apply_admin_balance_set(
+    session: AsyncSession,
+    user: User,
+    new_balance: int,
+    note: str | None = None,
+) -> Transaction | None:
+    """Выставить баланс участника вручную (запись admin_adjust)."""
+    if new_balance < 0:
+        raise ValueError("Баланс не может быть отрицательным.")
+    delta = new_balance - user.balance_feb
+    if delta == 0:
+        return None
+    user.balance_feb = new_balance
+    tx = Transaction(
+        user_id=user.id,
+        delta=delta,
+        kind=TxKind.admin_adjust,
+        balance_after=user.balance_feb,
+        note=(note or "").strip() or "Корректировка в админке",
+    )
+    session.add(tx)
+    await session.flush()
+    return tx
+
+
 async def create_prize_claim(
     session: AsyncSession,
     user: User,

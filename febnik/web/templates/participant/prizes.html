@@ -1,0 +1,35 @@
+{% extends "participant/base.html" %}
+{% block title %}Оформить приз — ФЭБник{% endblock %}
+{% block content %}
+<div class="feb-card" style="background: rgba(255, 255, 255, 0.72); border: 1px solid rgba(40, 40, 40, 0.08);">
+  <div class="feb-page-tools">
+    <h1>Оформить приз</h1>
+    <a href="/cabinet" class="feb-btn feb-btn-ghost feb-btn-sm" style="flex-shrink: 0;">В кабинет</a>
+  </div>
+  <p class="feb-muted">Баланс: <strong>{{ user.balance_feb }} ФЭБ</strong>. После оформления подойдите на стойку и назовите номер заявки активисту.</p>
+  {% if flash_prizes %}
+  <div class="feb-flash" style="margin-top: 0.75rem;">{{ flash_prizes }}</div>
+  {% endif %}
+  {% if not prizes %}
+  <p style="margin-top: 1rem;">Сейчас нет призов в наличии.</p>
+  {% else %}
+  <ul class="feb-prize-list">
+    {% for p in prizes %}
+    <li class="feb-prize-item">
+      <div class="feb-prize-item__head">
+        <strong>{{ p.name }}</strong>
+        <span class="feb-muted">{{ p.cost_feb }} ФЭБ · остаток {{ p.stock }}</span>
+      </div>
+      {% if user.balance_feb >= p.cost_feb %}
+      <form method="post" action="/cabinet/claim/{{ p.id }}">
+        <button type="submit" class="feb-btn feb-btn-accent" style="width: 100%;">Оформить</button>
+      </form>
+      {% else %}
+      <p class="feb-prize-insufficient">Недостаточно ФЭБартов: нужно {{ p.cost_feb }}, у вас {{ user.balance_feb }}.</p>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+{% endblock %}

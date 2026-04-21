@@ -1,12 +1,15 @@
 from functools import lru_cache
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    bot_token: str
+    # При BOT_ENABLED=false бот не запускается — только веб (участники и админка).
+    bot_enabled: bool = False
+    bot_token: str = ""
     database_url: str = "sqlite+aiosqlite:///./febnik.db"
 
     # HTTP-клиент Telegram (aiohttp): таймаут и опционально прокси (если API недоступен из сети)
@@ -33,6 +36,12 @@ class Settings(BaseSettings):
     admin_username: str = "admin"
     admin_password: str = "change-me"
     session_secret: str = "change-me-generate-long-random-string"
+
+    @model_validator(mode="after")
+    def _require_bot_token_if_bot(self) -> "Settings":
+        if self.bot_enabled and not (self.bot_token or "").strip():
+            raise ValueError("Задайте BOT_TOKEN в .env, если BOT_ENABLED=true")
+        return self
 
     @staticmethod
     def _parse_ids(raw: str) -> set[int]:

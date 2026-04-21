@@ -1,0 +1,20 @@
+{% extends "participant/base.html" %}
+{% block title %}Заявка на ФЭБ — ФЭБник{% endblock %}
+{% block content %}
+<div class="feb-card">
+  <h1>Заявка на начисление ФЭБ</h1>
+  {% if pending %}
+  <div class="feb-flash">У вас уже есть заявка на рассмотрении.</div>
+  {% else %}
+  <p class="feb-muted">Укажите сумму (1–{{ max_feb }} ФЭБ) и комментарий для оргкомитета.</p>
+  <form method="post" action="/cabinet/request">
+    <label>Сумма, ФЭБ</label>
+    <input type="number" name="amount_feb" min="1" max="{{ max_feb }}" required>
+    <label>Комментарий</label>
+    <textarea name="comment" rows="3" placeholder="Например: оплата на стойке"></textarea>
+    <p style="margin-top:1.25rem;"><button type="submit" class="feb-btn" style="width:100%;">Отправить</button></p>
+  </form>
+  {% endif %}
+  <p style="margin-top:1rem;"><a href="/cabinet">← В кабинет</a></p>
+</div>
+{% endblock %}

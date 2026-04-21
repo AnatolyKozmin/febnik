@@ -7,6 +7,9 @@
     <h1>Вход в админку</h1>
     <p class="muted">Учётная запись выдаётся оргкомитету. Сессия сохраняется в браузере.</p>
     <form method="post" action="/admin/login">
+      {% if next_after_login %}
+      <input type="hidden" name="next" value="{{ next_after_login }}">
+      {% endif %}
       <label>Логин
         <input type="text" name="username" required autocomplete="username" placeholder="admin">
       </label>

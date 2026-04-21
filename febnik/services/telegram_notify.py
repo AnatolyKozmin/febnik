@@ -11,7 +11,11 @@ logger = logging.getLogger(__name__)
 
 
 async def send_user_message(telegram_id: int, text: str) -> None:
+    if telegram_id <= 0:
+        return
     s = get_settings()
+    if not s.bot_enabled or not (s.bot_token or "").strip():
+        return
     session = AiohttpSession(
         timeout=s.telegram_request_timeout,
         proxy=s.telegram_proxy or None,

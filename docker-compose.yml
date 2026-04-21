@@ -19,6 +19,8 @@ services:
       - "${WEB_PUBLISH_PORT:-8001}:8080"
     volumes:
       - febnik_data:/data
+      # Шаблоны и /static с хоста — иначе после правок нужен `docker compose build` каждый раз
+      - ./febnik:/app/febnik:ro
 
 volumes:
   febnik_data:

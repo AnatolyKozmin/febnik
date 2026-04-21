@@ -1,16 +1,16 @@
-{% extends "base.html" %}
-{% block title %}Призы — ФЭБник{% endblock %}
+{% extends "participant/base.html" %}
+{% block title %}Каталог призов — ФЭБник{% endblock %}
 {% block content %}
-<div class="card">
-  <div class="toolbar">
-    <h1 style="margin:0; flex:1; min-width:0;">Призы</h1>
-    <a href="/" class="btn btn-secondary btn-sm">Назад</a>
+<div class="feb-card" style="background: rgba(255, 255, 255, 0.72); border: 1px solid rgba(40, 40, 40, 0.08);">
+  <div class="feb-page-tools">
+    <h1>Призы</h1>
+    <a href="/cabinet" class="feb-btn feb-btn-ghost feb-btn-sm" style="flex-shrink: 0;">В кабинет</a>
   </div>
-  <p class="muted">Стоимость в ФЭБартах. Оформление — в Telegram-боте командой /claim.</p>
+  <p class="feb-muted" style="margin-top: 0;">Стоимость в ФЭБ. Оформить приз можно в кабинете — раздел «Оформить приз».</p>
   {% if not prizes %}
-  <p>Призов пока нет.</p>
+  <p style="margin-top: 1rem;">Призов пока нет.</p>
   {% else %}
-  <div class="table-wrap">
+  <div class="feb-table-wrap">
   <table>
     <thead>
       <tr><th>Название</th><th>Цена, ФЭБ</th><th>Остаток</th></tr>
@@ -27,5 +27,8 @@
   </table>
   </div>
   {% endif %}
+  <p style="margin-top: 1.25rem;">
+    <a class="feb-btn feb-btn-accent" href="/cabinet/prizes" style="width: 100%; box-sizing: border-box;">Оформить приз</a>
+  </p>
 </div>
 {% endblock %}

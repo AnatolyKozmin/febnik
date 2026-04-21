@@ -1,14 +1,18 @@
 import logging
 from collections.abc import Callable
+from pathlib import Path
 
 from fastapi import FastAPI, Request, Response
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 
 from febnik.config import get_settings
 from febnik.web.routes_admin import router as admin_router
+from febnik.web.routes_participant import router as participant_router
 from febnik.web.routes_public import router as public_router
+from febnik.web.routes_scan import router as scan_router
 
 logger = logging.getLogger(__name__)
 
@@ -34,10 +38,16 @@ def create_app() -> FastAPI:
         SessionMiddleware,
         secret_key=settings.session_secret,
         https_only=False,
-        max_age=14 * 24 * 3600,
+        max_age=30 * 24 * 3600,
         same_site="lax",
     )
 
     app.include_router(public_router)
+    app.include_router(participant_router)
+    app.include_router(scan_router)
     app.include_router(admin_router)
+
+    _static = Path(__file__).resolve().parent / "static"
+    if _static.is_dir():
+        app.mount("/static", StaticFiles(directory=str(_static)), name="static")
     return app

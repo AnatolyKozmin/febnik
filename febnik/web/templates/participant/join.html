@@ -1,0 +1,84 @@
+{% extends "participant/base.html" %}
+{% block title %}Вход — ФЭБник{% endblock %}
+{% block head %}
+<style>
+  @font-face {
+    font-family: "Denistina";
+    src: url("/static/fonts/denistina_en.ttf") format("truetype");
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+  }
+  .feb-join-name-label {
+    font-family: "Denistina", var(--font-body);
+    font-weight: 400;
+    font-size: clamp(2rem, 6.5vw, 3rem);
+    letter-spacing: 0.02em;
+    color: var(--feb-text);
+    text-align: center;
+    display: block;
+  }
+  .feb-join-name-input {
+    text-align: center;
+    font-family: var(--font-accent);
+    font-size: 1.1rem;
+  }
+  .feb-join-name-input::placeholder {
+    font-family: var(--font-accent);
+  }
+  .feb-logo-reg {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 1.25rem;
+  }
+  /* Логотип из Figma (frame 8232:8), экспорт PNG */
+  .feb-logo-reg .feb-logo-img {
+    width: min(100%, 360px);
+    height: auto;
+    display: block;
+    margin: 0 auto;
+    border-radius: 12px;
+  }
+  .feb-logo-reg svg {
+    width: min(100%, 360px);
+    height: auto;
+    display: block;
+    margin: 0 auto;
+  }
+  .feb-join-card .feb-card {
+    padding-top: 1.5rem;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+  }
+</style>
+{% endblock %}
+{% block content %}
+<div class="feb-join-card">
+<div class="feb-card">
+  <div class="feb-logo-reg">
+    <img
+      class="feb-logo-img"
+      src="/static/brand/logo-registration.png"
+      width="720"
+      height="720"
+      alt="ББ ФЭБник"
+      decoding="async"
+      fetchpriority="high"
+      onerror="this.replaceWith(document.getElementById('feb-logo-svg-fallback').content.cloneNode(true))"
+    >
+    <template id="feb-logo-svg-fallback">{% include "participant/includes/logo-registration.svg" %}</template>
+  </div>
+  {% if flash_join %}
+  <div class="feb-flash">{{ flash_join }}</div>
+  {% endif %}
+  <form method="post" action="/join">
+    <label class="feb-join-name-label" for="fn">Фамилия и имя</label>
+    <input id="fn" class="feb-join-name-input" type="text" name="full_name" required maxlength="512" autocomplete="name" placeholder="Иванов Иван">
+    <p style="margin-top:1.5rem;">
+      <button type="submit" class="feb-btn feb-btn-accent" style="width:100%;">Продолжить</button>
+    </p>
+  </form>
+</div>
+</div>
+{% endblock %}

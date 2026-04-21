@@ -24,6 +24,56 @@ async def main() -> None:
     await init_db()
     settings = get_settings()
 
+    if not settings.web_enabled and not settings.bot_enabled:
+        raise SystemExit("Задайте WEB_ENABLED=true и/или BOT_ENABLED=true в .env")
+
+    if settings.web_enabled:
+        import uvicorn
+
+        from febnik.web.app import create_app
+
+        app = create_app()
+        cfg = uvicorn.Config(
+            app,
+            host=settings.web_host,
+            port=settings.web_port,
+            log_level="info",
+            loop="asyncio",
+        )
+        server = uvicorn.Server(cfg)
+        logger.info(
+            "Веб-приложение: http://%s:%s",
+            settings.web_host,
+            settings.web_port,
+        )
+
+        if settings.bot_enabled:
+            tg_session = AiohttpSession(
+                timeout=settings.telegram_request_timeout,
+                proxy=settings.telegram_proxy or None,
+            )
+            bot = Bot(settings.bot_token, session=tg_session)
+            dp = Dispatcher(storage=MemoryStorage())
+            dp.update.middleware(DbSessionMiddleware())
+            _staff_mw = StaffCommandsMiddleware()
+            dp.message.middleware(_staff_mw)
+            dp.callback_query.middleware(_staff_mw)
+            dp.include_router(start.router)
+            dp.include_router(user.router)
+            dp.include_router(balance_request.router)
+            dp.include_router(claim.router)
+            dp.include_router(staff.router)
+
+            await setup_bot_commands(bot)
+            try:
+                await asyncio.gather(server.serve(), dp.start_polling(bot))
+            finally:
+                await bot.session.close()
+        else:
+            await server.serve()
+        return
+
+    # Только бот (без веба)
     tg_session = AiohttpSession(
         timeout=settings.telegram_request_timeout,
         proxy=settings.telegram_proxy or None,
@@ -41,31 +91,8 @@ async def main() -> None:
     dp.include_router(staff.router)
 
     await setup_bot_commands(bot)
-
     try:
-        if settings.web_enabled:
-            import uvicorn
-
-            from febnik.web.app import create_app
-
-            app = create_app()
-            # asyncio вместо uvloop: меньше конфликтов с aiohttp/aiogram в одном процессе
-            cfg = uvicorn.Config(
-                app,
-                host=settings.web_host,
-                port=settings.web_port,
-                log_level="info",
-                loop="asyncio",
-            )
-            server = uvicorn.Server(cfg)
-            logger.info(
-                "Веб-панель: http://%s:%s (для ссылок в боте задайте WEB_PUBLIC_BASE_URL, если хост не localhost)",
-                settings.web_host,
-                settings.web_port,
-            )
-            await asyncio.gather(server.serve(), dp.start_polling(bot))
-        else:
-            await dp.start_polling(bot)
+        await dp.start_polling(bot)
     finally:
         await bot.session.close()
 

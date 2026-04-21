@@ -1,20 +1,20 @@
-{% extends "base.html" %}
+{% extends "participant/base.html" %}
 {% block title %}Расписание — ФЭБник{% endblock %}
 {% block content %}
-<div class="card">
-  <div class="toolbar">
-    <h1 style="margin:0; flex:1; min-width:0;">Интерактивы</h1>
-    <a href="/" class="btn btn-secondary btn-sm">Назад</a>
+<div class="feb-card" style="background: rgba(255, 255, 255, 0.72); border: 1px solid rgba(40, 40, 40, 0.08);">
+  <div class="feb-page-tools">
+    <h1>Активности</h1>
+    <a href="/cabinet" class="feb-btn feb-btn-ghost feb-btn-sm" style="flex-shrink: 0;">В кабинет</a>
   </div>
   {% if empty_today %}
-  <p class="muted">На сегодня ({{ today.strftime('%d.%m.%Y') }}) в базе нет строк с этой датой — ниже все загруженные позиции.</p>
+  <p class="feb-muted">На сегодня ({{ today.strftime('%d.%m.%Y') }}) в базе нет строк с этой датой — ниже все загруженные позиции.</p>
   {% else %}
-  <p class="muted">Дата «сегодня» в базе: {{ today.strftime('%d.%m.%Y') }}</p>
+  <p class="feb-muted" style="margin: 0;">Дата «сегодня» в базе: {{ today.strftime('%d.%m.%Y') }}</p>
   {% endif %}
   {% if not activities %}
-  <p>Пока пусто. Оргкомитет добавит расписание в админке.</p>
+  <p style="margin-top: 1rem;">Пока пусто. Оргкомитет добавит расписание в админке.</p>
   {% else %}
-  <div class="table-wrap">
+  <div class="feb-table-wrap">
   <table>
     <thead>
       <tr><th>Название</th><th>Дата</th><th>Время</th><th>Награда, ФЭБ</th></tr>

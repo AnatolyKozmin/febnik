@@ -1,9 +1,12 @@
 import csv
 import io
-from datetime import date, datetime
+import logging
+from datetime import date, datetime, timezone
 from pathlib import Path
+from typing import Annotated
+from urllib.parse import urlencode
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
@@ -20,9 +23,14 @@ from febnik.db.models import (
     Transaction,
     User,
 )
-from febnik.services.balance import approve_balance_request, reject_balance_request
+from febnik.services.balance import apply_interactive_reward, approve_balance_request, reject_balance_request
+from febnik.services.qr_token import parse_participant_scan_token
+from febnik.services.sheets import append_log_row_async
 from febnik.services.telegram_notify import send_user_message
+from febnik.services.user_web import is_web_user
 from febnik.web.deps import DbSession
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
@@ -46,11 +54,27 @@ def _ctx(request: Request, **extra: object):
     return base
 
 
+def _safe_redirect_path(raw: str | None) -> str | None:
+    if not raw:
+        return None
+    s = raw.strip()
+    if not s.startswith("/") or s.startswith("//"):
+        return None
+    return s
+
+
 @router.get("/admin/login", response_class=HTMLResponse)
-async def admin_login_get(request: Request) -> HTMLResponse:
+async def admin_login_get(
+    request: Request,
+    next: Annotated[str | None, Query(alias="next")] = None,
+) -> HTMLResponse:
     if request.session.get("admin"):
-        return RedirectResponse(url="/admin/", status_code=302)
-    return templates.TemplateResponse("admin/login.html", _ctx(request))
+        target = _safe_redirect_path(next) or "/admin/"
+        return RedirectResponse(url=target, status_code=302)
+    return templates.TemplateResponse(
+        "admin/login.html",
+        _ctx(request, next_after_login=_safe_redirect_path(next)),
+    )
 
 
 @router.post("/admin/login")
@@ -58,20 +82,72 @@ async def admin_login_post(
     request: Request,
     username: str = Form(...),
     password: str = Form(...),
+    next: str = Form(""),
 ) -> RedirectResponse:
     s = get_settings()
     if username == s.admin_username and password == s.admin_password:
         request.session["admin"] = True
         request.session["flash"] = "Вход выполнен."
-        return RedirectResponse(url="/admin/", status_code=302)
+        target = _safe_redirect_path(next) or "/admin/"
+        return RedirectResponse(url=target, status_code=302)
     request.session["flash"] = "Неверный логин или пароль."
-    return RedirectResponse(url="/admin/login", status_code=302)
+    fail = "/admin/login"
+    sn = _safe_redirect_path(next)
+    if sn:
+        fail += "?" + urlencode({"next": sn})
+    return RedirectResponse(url=fail, status_code=302)
 
 
 @router.get("/admin/logout")
 async def admin_logout(request: Request) -> RedirectResponse:
-    request.session.clear()
+    request.session.pop("admin", None)
     return RedirectResponse(url="/admin/login", status_code=302)
+
+
+@router.post("/admin/award-from-qr")
+async def admin_award_from_qr(
+    request: Request,
+    session: DbSession,
+    t: str = Form(...),
+    activity_id: int = Form(...),
+) -> RedirectResponse:
+    if not request.session.get("admin"):
+        return RedirectResponse(url="/admin/login", status_code=302)
+    uid = parse_participant_scan_token(t.strip())
+    if uid is None:
+        request.session["flash"] = "Недействительная ссылка начисления."
+        return RedirectResponse(url="/admin/", status_code=302)
+    user = await session.get(User, uid)
+    if not user or not is_web_user(user):
+        request.session["flash"] = "Участник не найден или не веб-профиль."
+        return RedirectResponse(url="/admin/", status_code=302)
+    act = await session.get(Activity, activity_id)
+    if not act:
+        request.session["flash"] = "Интерактив не найден."
+        return RedirectResponse(url="/admin/", status_code=302)
+
+    tx = await apply_interactive_reward(session, user, act.reward_feb, act.id, note=f"Интерактив: {act.name} (QR)")
+    await session.flush()
+    settings = get_settings()
+    try:
+        await append_log_row_async(
+            settings,
+            when=datetime.now(timezone.utc),
+            telegram_id=user.telegram_id,
+            username=user.username,
+            full_name=user.full_name,
+            delta=tx.delta,
+            balance_after=tx.balance_after,
+            kind="interactive_reward",
+            note=f"{act.name} (веб QR)",
+        )
+    except Exception:
+        logger.exception("sheets log (award QR)")
+
+    request.session["flash"] = (
+        f"Начислено {act.reward_feb} ФЭБ участнику {user.full_name} за «{act.name}». Баланс: {user.balance_feb}."
+    )
+    return RedirectResponse(url="/admin/", status_code=302)
 
 
 @router.get("/admin/", response_class=HTMLResponse)
@@ -317,13 +393,15 @@ async def admin_balance_request_approve(request: Request, session: DbSession, ri
         request.session["flash"] = str(e)
         return RedirectResponse(url="/admin/balance-requests", status_code=302)
     user = await session.get(User, req.user_id)
-    if user:
+    if user and user.telegram_id > 0:
         await send_user_message(
             user.telegram_id,
             f"Заявка №{rid} одобрена: начислено {req.amount_feb} ФЭБ. "
             f"Ваш баланс: {user.balance_feb} ФЭБ.",
         )
-    request.session["flash"] = f"Заявка №{rid} одобрена, участник уведомлён в Telegram."
+        request.session["flash"] = f"Заявка №{rid} одобрена, участник уведомлён в Telegram."
+    else:
+        request.session["flash"] = f"Заявка №{rid} одобрена (без уведомления в Telegram — веб-участник)."
     return RedirectResponse(url="/admin/balance-requests", status_code=302)
 
 
@@ -345,13 +423,15 @@ async def admin_balance_request_reject(
         request.session["flash"] = str(e)
         return RedirectResponse(url="/admin/balance-requests", status_code=302)
     user = await session.get(User, req.user_id)
-    if user:
+    if user and user.telegram_id > 0:
         text = f"Заявка №{rid} на {req.amount_feb} ФЭБ отклонена."
         rr = (reason or "").strip()
         if rr:
             text += f" Комментарий: {rr}"
         await send_user_message(user.telegram_id, text)
-    request.session["flash"] = f"Заявка №{rid} отклонена."
+        request.session["flash"] = f"Заявка №{rid} отклонена, участник уведомлён в Telegram."
+    else:
+        request.session["flash"] = f"Заявка №{rid} отклонена."
     return RedirectResponse(url="/admin/balance-requests", status_code=302)
 
 

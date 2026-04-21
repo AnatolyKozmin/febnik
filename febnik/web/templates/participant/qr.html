@@ -1,0 +1,13 @@
+{% extends "participant/base.html" %}
+{% block title %}Мой QR — ФЭБник{% endblock %}
+{% block content %}
+<div class="feb-card">
+  <h1>Ваш QR-код</h1>
+  <p class="feb-muted">Организатор открывает ссылку после сканирования и начисляет баллы за интерактив (вход в админку).</p>
+  <div class="feb-qr-wrap">
+    <img src="/cabinet/qr.png" width="280" height="280" alt="QR код участника">
+  </div>
+  <p class="feb-muted" style="margin-top:1rem;font-size:0.85rem;word-break:break-all;">{{ scan_url }}</p>
+  <p style="margin-top:1.25rem;"><a href="/cabinet">← В кабинет</a></p>
+</div>
+{% endblock %}

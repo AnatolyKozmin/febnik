@@ -1,0 +1,14 @@
+# На сервере рядом с arkadium-edge-nginx (сеть arkadium_shared):
+#   docker compose -f docker-compose.yml -f docker-compose.server.yml up -d --build
+#
+# Локально этот файл не подключай — сеть external отсутствует.
+
+services:
+  febnik:
+    networks:
+      - arkadium_shared
+
+networks:
+  arkadium_shared:
+    external: true
+    name: arkadium_shared

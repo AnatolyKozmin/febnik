@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import smtplib
+import socket
+import ssl
 from email.message import EmailMessage
 
 from febnik.config import Settings
@@ -40,6 +42,23 @@ def _smtp_password_clean(settings: Settings) -> str:
     return (settings.smtp_password or "").replace(" ", "").replace("\n", "").replace("\r", "").strip()
 
 
+def _smtp_connect_target(settings: Settings) -> tuple[str, str]:
+    """(адрес для TCP, имя хоста для проверки TLS после STARTTLS)."""
+    host = (settings.smtp_host or "").strip()
+    port = settings.smtp_port
+    if not settings.smtp_prefer_ipv4:
+        return host, host
+    try:
+        infos = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
+        if infos:
+            ip = infos[0][4][0]
+            logger.info("SMTP: соединение по IPv4 %s вместо %s", ip, host)
+            return ip, host
+    except OSError as e:
+        logger.warning("SMTP: не удалось взять IPv4 для %s, остаёмся на имени: %s", host, e)
+    return host, host
+
+
 def _send_otp_sync(
     settings: Settings,
     to_email: str,
@@ -56,17 +75,20 @@ def _send_otp_sync(
     )
     pwd = _smtp_password_clean(settings)
     user = (settings.smtp_user or "").strip()
+    connect_host, tls_name = _smtp_connect_target(settings)
     logger.info(
         "SMTP: подключение %s:%s STARTTLS=%s login=%s",
-        settings.smtp_host,
+        connect_host,
         settings.smtp_port,
         settings.smtp_starttls,
         bool(user),
     )
     try:
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=30) as smtp:
+        with smtplib.SMTP(connect_host, settings.smtp_port, timeout=30) as smtp:
             if settings.smtp_starttls:
-                smtp.starttls()
+                ctx = ssl.create_default_context()
+                # При коннекте по IP сертификат всё равно на smtp.gmail.com — задаём имя явно.
+                smtp.starttls(context=ctx, server_hostname=tls_name)
             if user:
                 smtp.login(user, pwd)
             smtp.send_message(msg)

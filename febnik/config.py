@@ -49,6 +49,8 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     smtp_from: str = ""
     smtp_starttls: bool = True
+    # На VPS часто сломан исходящий IPv6 — Gmail тогда «висит». Включите на сервере.
+    smtp_prefer_ipv4: bool = False
     join_otp_ttl_seconds: int = 600
     join_otp_resend_seconds: int = 60
     # «Запомнить» веб-участника после входа по почте (подписанная cookie febnik_p).

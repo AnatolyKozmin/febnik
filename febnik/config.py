@@ -49,6 +49,8 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     smtp_from: str = ""
     smtp_starttls: bool = True
+    # Gmail: альтернатива 587+STARTTLS — порт 465 с TLS сразу (иногда на VPS 587 «висит», 465 проходит).
+    smtp_implicit_ssl: bool = False
     # На VPS часто сломан исходящий IPv6 — Gmail тогда «висит». Включите на сервере.
     smtp_prefer_ipv4: bool = False
     join_otp_ttl_seconds: int = 600

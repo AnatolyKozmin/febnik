@@ -59,6 +59,30 @@ def _smtp_connect_target(settings: Settings) -> tuple[str, str]:
     return host, host
 
 
+def _smtp_ssl_client_ipv4(
+    logical_host: str,
+    port: int,
+    timeout: float,
+) -> smtplib.SMTP:
+    """TLS с первого байта (порт 465): TCP на IPv4, SNI/сертификат по logical_host (как smtp.gmail.com)."""
+    infos = socket.getaddrinfo(logical_host, port, socket.AF_INET, socket.SOCK_STREAM)
+    if not infos:
+        raise OSError(f"Нет IPv4 для {logical_host}:{port}")
+    ip = infos[0][4][0]
+    logger.info("SMTP SSL: IPv4 %s → TLS (имя сертификата %s)", ip, logical_host)
+    raw = socket.create_connection((ip, port), timeout=timeout)
+    ctx = ssl.create_default_context()
+    ssock = ctx.wrap_socket(raw, server_hostname=logical_host)
+    smtp = smtplib.SMTP(timeout=timeout)
+    smtp.sock = ssock
+    smtp.file = ssock.makefile("rb")
+    smtp._host = logical_host
+    (code, resp) = smtp.getreply()
+    if code != 220:
+        raise smtplib.SMTPConnectError(code, resp)
+    return smtp
+
+
 def _send_otp_sync(
     settings: Settings,
     to_email: str,
@@ -75,32 +99,57 @@ def _send_otp_sync(
     )
     pwd = _smtp_password_clean(settings)
     user = (settings.smtp_user or "").strip()
-    connect_host, tls_name = _smtp_connect_target(settings)
-    logger.info(
-        "SMTP: подключение %s:%s STARTTLS=%s login=%s",
-        connect_host,
-        settings.smtp_port,
-        settings.smtp_starttls,
-        bool(user),
-    )
+    logical = (settings.smtp_host or "").strip()
+    port = settings.smtp_port
+    timeout = 60.0
+
     try:
-        with smtplib.SMTP(connect_host, settings.smtp_port, timeout=60) as smtp:
-            if settings.smtp_starttls:
+        if settings.smtp_implicit_ssl:
+            logger.info("SMTP: режим SSL с порта (порт %s), login=%s", port, bool(user))
+            if settings.smtp_prefer_ipv4:
+                smtp = _smtp_ssl_client_ipv4(logical, port, timeout)
+                try:
+                    if user:
+                        smtp.login(user, pwd)
+                        logger.info("SMTP: авторизация ок")
+                    smtp.send_message(msg)
+                finally:
+                    try:
+                        smtp.quit()
+                    except Exception:
+                        smtp.close()
+            else:
                 ctx = ssl.create_default_context()
-                # При коннекте по IP сертификат всё равно на smtp.gmail.com — задаём имя явно.
-                smtp.starttls(context=ctx, server_hostname=tls_name)
-                logger.info("SMTP: STARTTLS готов")
-            if user:
-                smtp.login(user, pwd)
-                logger.info("SMTP: авторизация ок")
-            smtp.send_message(msg)
-    except smtplib.SMTPAuthenticationError as e:
+                with smtplib.SMTP_SSL(logical, port, timeout=int(timeout), context=ctx) as smtp:
+                    if user:
+                        smtp.login(user, pwd)
+                        logger.info("SMTP: авторизация ок")
+                    smtp.send_message(msg)
+        else:
+            connect_host, tls_name = _smtp_connect_target(settings)
+            logger.info(
+                "SMTP: подключение %s:%s STARTTLS=%s login=%s",
+                connect_host,
+                port,
+                settings.smtp_starttls,
+                bool(user),
+            )
+            with smtplib.SMTP(connect_host, port, timeout=int(timeout)) as smtp:
+                if settings.smtp_starttls:
+                    ctx = ssl.create_default_context()
+                    smtp.starttls(context=ctx, server_hostname=tls_name)
+                    logger.info("SMTP: STARTTLS готов")
+                if user:
+                    smtp.login(user, pwd)
+                    logger.info("SMTP: авторизация ок")
+                smtp.send_message(msg)
+    except smtplib.SMTPAuthenticationError:
         logger.exception("SMTP: ошибка авторизации (проверьте пароль приложения и SMTP_USER)")
         raise
-    except OSError as e:
-        logger.exception("SMTP: сеть или таймаут (из Docker часто блокируют 587 или IPv6)")
+    except OSError:
+        logger.exception("SMTP: сеть или таймаут (587/465, файрвол, IPv6)")
         raise
-    except smtplib.SMTPException as e:
+    except smtplib.SMTPException:
         logger.exception("SMTP: отказ сервера")
         raise
     logger.info("SMTP: письмо с кодом отправлено на %s", to_email)

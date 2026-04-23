@@ -84,13 +84,15 @@ def _send_otp_sync(
         bool(user),
     )
     try:
-        with smtplib.SMTP(connect_host, settings.smtp_port, timeout=30) as smtp:
+        with smtplib.SMTP(connect_host, settings.smtp_port, timeout=60) as smtp:
             if settings.smtp_starttls:
                 ctx = ssl.create_default_context()
                 # При коннекте по IP сертификат всё равно на smtp.gmail.com — задаём имя явно.
                 smtp.starttls(context=ctx, server_hostname=tls_name)
+                logger.info("SMTP: STARTTLS готов")
             if user:
                 smtp.login(user, pwd)
+                logger.info("SMTP: авторизация ок")
             smtp.send_message(msg)
     except smtplib.SMTPAuthenticationError as e:
         logger.exception("SMTP: ошибка авторизации (проверьте пароль приложения и SMTP_USER)")

@@ -1,0 +1,16 @@
+{% extends "participant/base.html" %}
+{% block title %}{% block join_title %}Вход — ФЭБник{% endblock %}{% endblock %}
+{% block head %}
+{% include "participant/includes/join_head.html" %}
+{% endblock %}
+{% block content %}
+<div class="feb-join-card">
+<div class="feb-card">
+{% include "participant/includes/join_logo.html" %}
+  {% if flash_join %}
+  <div class="feb-flash">{{ flash_join }}</div>
+  {% endif %}
+  {% block join_inner %}{% endblock %}
+</div>
+</div>
+{% endblock %}

@@ -17,3 +17,12 @@ async def apply_sqlite_migrations(connection: AsyncConnection) -> None:
     cols = {row[1] for row in rows}
     if cols and "balance_request_id" not in cols:
         await connection.execute(text("ALTER TABLE transactions ADD COLUMN balance_request_id INTEGER"))
+
+    try:
+        ur = await connection.execute(text("PRAGMA table_info(users)"))
+        ucols = {row[1] for row in ur.fetchall()}
+    except Exception:
+        ucols = set()
+    if ucols and "email" not in ucols:
+        await connection.execute(text("ALTER TABLE users ADD COLUMN email VARCHAR(255)"))
+        await connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_users_email ON users(email)"))

@@ -8,11 +8,11 @@
   </div>
   <form method="post" action="{% if activity %}/admin/activities/{{ activity.id }}/edit{% else %}/admin/activities/new{% endif %}">
     <label>Название <input type="text" name="name" required value="{{ activity.name if activity else '' }}"></label>
-    <label>Награда, ФЭБ <input type="number" name="reward_feb" min="0" value="{{ activity.reward_feb if activity else 0 }}"></label>
+    <label>Награда, ФЭБарт <input type="number" name="reward_feb" min="0" value="{{ activity.reward_feb if activity else 0 }}"></label>
     <label>Дата (можно пусто) <input type="date" name="event_date" value="{{ activity.event_date.isoformat() if activity and activity.event_date else '' }}"></label>
     <label>Время (текст, напр. 14:00) <input type="text" name="time_text" value="{{ activity.time_text or '' }}" placeholder="14:00"></label>
     <label>Ответственный — Telegram username без @ <input type="text" name="responsible_username" value="{{ activity.responsible_username or '' }}" placeholder="ivanov"></label>
-    <p class="muted">Бот начисляет ФЭБ только если в профиле Telegram у ответственного такой же @username.</p>
+    <p class="muted">Бот начисляет ФЭБарт только если в профиле Telegram у ответственного такой же @username.</p>
     <p class="row-actions" style="margin-top:1rem;"><button type="submit" class="btn">Сохранить</button> <a href="/admin/activities" class="btn btn-secondary">Отмена</a></p>
   </form>
 </div>

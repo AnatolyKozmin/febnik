@@ -121,7 +121,7 @@ async def cmd_award(message: Message, session: AsyncSession, state: FSMContext) 
         await state.update_data(activity_id=acts[0].id)
         await message.answer(
             f"Интерактив: {acts[0].name}\n"
-            f"Награда: {acts[0].reward_feb} ФЭБ.\n"
+            f"Награда: {acts[0].reward_feb} ФЭБарт.\n"
             "Введите @username участника или его ник без @.",
         )
         return
@@ -145,7 +145,7 @@ async def cb_award_pick(callback: CallbackQuery, session: AsyncSession, state: F
     await state.update_data(activity_id=aid)
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.message.answer(
-        f"Интерактив: {act.name}\nНаграда: {act.reward_feb} ФЭБ.\nВведите @username или ник участника.",
+        f"Интерактив: {act.name}\nНаграда: {act.reward_feb} ФЭБарт.\nВведите @username или ник участника.",
     )
     await callback.answer()
 
@@ -192,12 +192,12 @@ async def award_enter_username(message: Message, session: AsyncSession, state: F
         logger.exception("sheets log")
 
     await state.clear()
-    await message.answer(f"Начислено {act.reward_feb} ФЭБ пользователю {target.full_name}.")
+    await message.answer(f"Начислено {act.reward_feb} ФЭБарт пользователю {target.full_name}.")
     try:
         await message.bot.send_message(
             target.telegram_id,
-            f"Вы прошли интерактив «{act.name}» и получили {act.reward_feb} ФЭБ. "
-            f"Баланс: {target.balance_feb} ФЭБ.",
+            f"Вы прошли интерактив «{act.name}» и получили {act.reward_feb} ФЭБарт. "
+            f"Баланс: {target.balance_feb} ФЭБарт.",
         )
     except Exception:
         logger.warning("notify user failed tg=%s", target.telegram_id)

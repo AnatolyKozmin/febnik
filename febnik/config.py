@@ -16,9 +16,9 @@ class Settings(BaseSettings):
     telegram_request_timeout: float = 120.0
     telegram_proxy: str | None = None
 
-    # Заявка на ФЭБ с сайта (/cabinet/request). Заявки из бота (/request) не зависят от этого.
+    # Заявка на ФЭБарт с сайта (/cabinet/request). Заявки из бота (/request) не зависят от этого.
     web_balance_request_enabled: bool = False
-    # Заявка /request (бот): максимум ФЭБ за одну заявку
+    # Заявка /request (бот): максимум ФЭБарт за одну заявку
     max_balance_request_feb: int = 5000
     # Начисление по QR (интерактив): верхняя граница суммы за одно действие
     max_qr_award_feb: int = 10000
@@ -40,6 +40,21 @@ class Settings(BaseSettings):
     admin_username: str = "admin"
     admin_password: str = "change-me"
     session_secret: str = "change-me-generate-long-random-string"
+
+    # Вход участника по почте: код в письме. Если SMTP_HOST пуст — код пишется в лог сервера.
+    # Gmail: smtp.gmail.com:587, SMTP_STARTTLS=true, SMTP_USER=полный адрес, SMTP_PASSWORD=пароль приложения (не пароль аккаунта).
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    smtp_starttls: bool = True
+    join_otp_ttl_seconds: int = 600
+    join_otp_resend_seconds: int = 60
+    # «Запомнить» веб-участника после входа по почте (подписанная cookie febnik_p).
+    participant_token_max_age_seconds: int = 10 * 365 * 24 * 3600
+    # В проде за HTTPS включите true — cookie только по TLS.
+    web_cookie_secure: bool = False
 
     @model_validator(mode="after")
     def _require_bot_token_if_bot(self) -> "Settings":

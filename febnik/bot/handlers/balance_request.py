@@ -97,6 +97,6 @@ async def br_enter_comment(message: Message, session: AsyncSession, state: FSMCo
     await state.clear()
 
     await message.answer(
-        f"Заявка №{br.id} отправлена: {br.amount_feb} ФЭБ.\n"
+        f"Заявка №{br.id} отправлена: {br.amount_feb} ФЭБарт.\n"
         "Оргкомитет рассмотрит её в веб-админке. После решения вам придёт сообщение здесь.",
     )

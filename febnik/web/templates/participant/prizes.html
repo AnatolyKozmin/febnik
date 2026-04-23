@@ -6,7 +6,7 @@
     <h1>Оформить приз</h1>
     <a href="/cabinet" class="feb-btn feb-btn-ghost feb-btn-sm" style="flex-shrink: 0;">В кабинет</a>
   </div>
-  <p class="feb-muted">Баланс: <strong>{{ user.balance_feb }} ФЭБ</strong>. После оформления подойдите на стойку и назовите номер заявки активисту.</p>
+  <p class="feb-muted">Баланс: <strong>{{ user.balance_feb }} ФЭБарт</strong>. После оформления подойдите на стойку и назовите номер заявки активисту.</p>
   {% if flash_prizes %}
   <div class="feb-flash" style="margin-top: 0.75rem;">{{ flash_prizes }}</div>
   {% endif %}
@@ -18,7 +18,7 @@
     <li class="feb-prize-item">
       <div class="feb-prize-item__head">
         <strong>{{ p.name }}</strong>
-        <span class="feb-muted">{{ p.cost_feb }} ФЭБ · остаток {{ p.stock }}</span>
+        <span class="feb-muted">{{ p.cost_feb }} ФЭБарт · остаток {{ p.stock }}</span>
       </div>
       {% if user.balance_feb >= p.cost_feb %}
       <form method="post" action="/cabinet/claim/{{ p.id }}">

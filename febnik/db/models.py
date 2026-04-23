@@ -38,6 +38,7 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
     username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True, index=True)
     full_name: Mapped[str] = mapped_column(String(512))
     role: Mapped[UserRole] = mapped_column(SAEnum(UserRole), default=UserRole.participant)
     balance_feb: Mapped[int] = mapped_column(Integer, default=0)
@@ -77,7 +78,7 @@ class Prize(Base):
 
 
 class BalanceRequest(Base):
-    """Заявка участника на начисление ФЭБ (модерация в веб-админке)."""
+    """Заявка участника на начисление ФЭБарт (модерация в веб-админке)."""
 
     __tablename__ = "balance_requests"
 

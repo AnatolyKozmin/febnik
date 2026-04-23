@@ -21,7 +21,7 @@ def _prizes_kb(prizes: list[Prize]) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     for p in prizes:
         rows.append(
-            [InlineKeyboardButton(text=f"{p.name} ({p.cost_feb} ФЭБ)", callback_data=f"claim:{p.id}")]
+            [InlineKeyboardButton(text=f"{p.name} ({p.cost_feb} ФЭБарт)", callback_data=f"claim:{p.id}")]
         )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -43,7 +43,7 @@ async def cmd_claim(message: Message, session: AsyncSession) -> None:
         return
 
     await message.answer(
-        f"Ваш баланс: {user.balance_feb} ФЭБ. Выберите приз — баллы спишутся сразу, "
+        f"Ваш баланс: {user.balance_feb} ФЭБарт. Выберите приз — баллы спишутся сразу, "
         "затем подойдите на стойку и назовите номер заявки активисту.",
         reply_markup=_prizes_kb(prizes),
     )
@@ -95,8 +95,8 @@ async def on_claim_prize(callback: CallbackQuery, session: AsyncSession) -> None
     await session.flush()
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.message.answer(
-        f"Заявка №{claim.id} оформлена: {prize.name} за {prize.cost_feb} ФЭБ.\n"
-        f"Остаток на счёте: {user.balance_feb} ФЭБ.\n"
+        f"Заявка №{claim.id} оформлена: {prize.name} за {prize.cost_feb} ФЭБарт.\n"
+        f"Остаток на счёте: {user.balance_feb} ФЭБарт.\n"
         "Подойдите на стойку выдачи и покажите этот номер активисту.",
     )
     await callback.answer()

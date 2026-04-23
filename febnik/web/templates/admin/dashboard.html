@@ -6,7 +6,7 @@
     <h1 style="margin:0; flex:1; min-width:0;">Панель управления</h1>
     <a href="/admin/logout" class="btn btn-secondary btn-sm">Выйти</a>
   </div>
-  <p class="muted" style="margin:0 0 0.5rem 0;">Сводка и очереди заявок. Начисление по QR: участник открывает «Мой QR» в кабинете → организатор переходит по ссылке из кода (или сканирует камерой) и после входа в админку указывает сумму ФЭБ.</p>
+  <p class="muted" style="margin:0 0 0.5rem 0;">Сводка и очереди заявок. Начисление по QR: участник открывает «Мой QR» в кабинете → организатор переходит по ссылке из кода (или сканирует камерой) и после входа в админку указывает сумму в ФЭБарт.</p>
   <p class="muted" style="margin:0 0 0.75rem 0;font-size:0.92rem;">
     <strong>Админка:</strong> <code>{{ panel_url }}/admin/</code> (вход <code>/admin/login</code>).
     <strong>Сканер / начисление:</strong> страница по ссылке из QR — <code>{{ panel_url }}/scan?t=…</code> (после авторизации организатора).
@@ -31,7 +31,7 @@
     {% if bot_enabled %}
     <div class="stat">
       <div class="stat-value">{{ pending_balance_requests }}</div>
-      <div class="stat-label">Заявок на ФЭБ (бот)</div>
+      <div class="stat-label">Заявок на ФЭБарт (бот)</div>
     </div>
     {% endif %}
   </div>
@@ -66,7 +66,7 @@
     <li>
       <a href="/admin/prizes">
         Призы
-        <span class="desc">Цена в ФЭБ и остаток на стойке</span>
+        <span class="desc">Цена в ФЭБарт и остаток на стойке</span>
       </a>
     </li>
     <li>
@@ -90,7 +90,7 @@
     {% if bot_enabled %}
     <li>
       <a href="/admin/balance-requests">
-        Заявки на ФЭБ (Telegram)
+        Заявки на ФЭБарт (Telegram)
         <span class="desc">Модерация /request в боте</span>
       </a>
     </li>

@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block title %}Заявки на ФЭБ — админка{% endblock %}
+{% block title %}Заявки на ФЭБарт — админка{% endblock %}
 {% block content %}
 <div class="card">
   <div class="toolbar">
-    <h1 style="margin:0; flex:1;">Заявки на начисление ФЭБ</h1>
+    <h1 style="margin:0; flex:1;">Заявки на начисление ФЭБарт</h1>
     <a href="/admin/" class="btn btn-secondary btn-sm">Назад</a>
   </div>
   <p class="muted">Участники создают заявки командой <code>/request</code> в боте. Здесь можно одобрить (начислить на баланс) или отклонить.</p>
@@ -15,7 +15,7 @@
   <div class="table-wrap">
   <table>
     <thead>
-      <tr><th>№</th><th>Участник</th><th>ФЭБ</th><th>Комментарий</th><th>Создана</th><th></th></tr>
+      <tr><th>№</th><th>Участник</th><th>ФЭБарт</th><th>Комментарий</th><th>Создана</th><th></th></tr>
     </thead>
     <tbody>
       {% for b in pending_rows %}
@@ -26,7 +26,7 @@
         <td>{{ b.comment or '—' }}</td>
         <td>{{ b.created_at }}</td>
         <td class="row-actions">
-          <form method="post" action="/admin/balance-requests/{{ b.id }}/approve" style="display:inline;" onsubmit="return confirm('Начислить {{ b.amount_feb }} ФЭБ?');">
+          <form method="post" action="/admin/balance-requests/{{ b.id }}/approve" style="display:inline;" onsubmit="return confirm('Начислить {{ b.amount_feb }} ФЭБарт?');">
             <button type="submit" class="btn btn-sm">Одобрить</button>
           </form>
           <form method="post" action="/admin/balance-requests/{{ b.id }}/reject" style="display:inline; margin-top:0.35rem;">
@@ -48,7 +48,7 @@
   <div class="table-wrap">
   <table>
     <thead>
-      <tr><th>№</th><th>Статус</th><th>Участник</th><th>ФЭБ</th><th>Комментарий</th><th>Решение</th></tr>
+      <tr><th>№</th><th>Статус</th><th>Участник</th><th>ФЭБарт</th><th>Комментарий</th><th>Решение</th></tr>
     </thead>
     <tbody>
       {% for b in history %}

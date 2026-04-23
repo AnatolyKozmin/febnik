@@ -51,7 +51,7 @@ def _to_int(s: Any, default: int = 0) -> int:
 
 
 def fetch_activities_rows(settings: Settings) -> list[dict[str, Any]]:
-    """Столбцы: A=Дата, B=Время, C=Название, D=Награда (ФЭБ), E=Ответственный (@username или без)."""
+    """Столбцы: A=Дата, B=Время, C=Название, D=Награда (ФЭБарт), E=Ответственный (@username или без)."""
     client = _client(settings)
     if not client:
         return []
@@ -130,7 +130,7 @@ def append_log_row(
     except gspread.exceptions.WorksheetNotFound:
         sh = client.open_by_key(settings.google_spreadsheet_id)
         ws = sh.add_worksheet(title=settings.sheet_log, rows=1000, cols=10)
-        ws.append_row(["Время (UTC)", "Telegram ID", "Username", "ФИО", "Δ ФЭБ", "Баланс после", "Тип", "Комментарий"])
+        ws.append_row(["Время (UTC)", "Telegram ID", "Username", "ФИО", "Δ ФЭБарт", "Баланс после", "Тип", "Комментарий"])
     ws.append_row(
         [
             when.isoformat(),
@@ -160,7 +160,7 @@ def ensure_log_sheet(settings: Settings) -> None:
         sh.worksheet(settings.sheet_log)
     except gspread.exceptions.WorksheetNotFound:
         ws = sh.add_worksheet(title=settings.sheet_log, rows=2000, cols=10)
-        ws.append_row(["Время (UTC)", "Telegram ID", "Username", "ФИО", "Δ ФЭБ", "Баланс после", "Тип", "Комментарий"])
+        ws.append_row(["Время (UTC)", "Telegram ID", "Username", "ФИО", "Δ ФЭБарт", "Баланс после", "Тип", "Комментарий"])
 
 
 async def sync_activities_from_sheet(session, settings: Settings | None = None) -> int:

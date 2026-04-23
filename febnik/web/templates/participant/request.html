@@ -1,14 +1,14 @@
 {% extends "participant/base.html" %}
-{% block title %}Заявка на ФЭБ — ФЭБник{% endblock %}
+{% block title %}Заявка на ФЭБарт — ФЭБник{% endblock %}
 {% block content %}
 <div class="feb-card">
-  <h1>Заявка на начисление ФЭБ</h1>
+  <h1>Заявка на начисление ФЭБарт</h1>
   {% if pending %}
   <div class="feb-flash">У вас уже есть заявка на рассмотрении.</div>
   {% else %}
-  <p class="feb-muted">Укажите сумму (1–{{ max_feb }} ФЭБ) и комментарий для оргкомитета.</p>
+  <p class="feb-muted">Укажите сумму (1–{{ max_feb }} ФЭБарт) и комментарий для оргкомитета.</p>
   <form method="post" action="/cabinet/request">
-    <label>Сумма, ФЭБ</label>
+    <label>Сумма, ФЭБарт</label>
     <input type="number" name="amount_feb" min="1" max="{{ max_feb }}" required>
     <label>Комментарий</label>
     <textarea name="comment" rows="3" placeholder="Например: оплата на стойке"></textarea>

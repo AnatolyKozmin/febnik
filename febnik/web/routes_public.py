@@ -8,12 +8,13 @@ from sqlalchemy import select
 
 from febnik.db.models import Activity, Prize
 from febnik.web.deps import DbSession, panel_base_url
+from febnik.web.participant_auth import get_participant_user_id
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
 _FAVICON_SVG = (
     b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
-    b'<rect width="32" height="32" rx="8" fill="#0c3229"/>'
+    b'<rect width="32" height="32" rx="8" fill="#69090b"/>'
     b'<path d="M8 22c4-8 10-12 16-12" stroke="#c49a4a" stroke-width="2" fill="none"/>'
     b"</svg>"
 )
@@ -34,7 +35,7 @@ async def favicon_ico() -> Response:
 
 @router.get("/", response_class=HTMLResponse)
 async def home(request: Request) -> RedirectResponse:
-    if request.session.get("participant_user_id"):
+    if get_participant_user_id(request):
         return RedirectResponse(url="/cabinet", status_code=302)
     return RedirectResponse(url="/join", status_code=302)
 

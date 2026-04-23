@@ -21,13 +21,13 @@ PARTICIPANT_COMMANDS: list[BotCommand] = [
     BotCommand(command="score", description="Сколько ФЭБартов на балансе"),
     BotCommand(command="activities", description="Интерактивы и расписание на сегодня"),
     BotCommand(command="prizes", description="Призы, цены и остатки"),
-    BotCommand(command="claim", description="Оформить приз (спишутся ФЭБ)"),
-    BotCommand(command="request", description="Заявка на начисление ФЭБ (решение в админке)"),
+    BotCommand(command="claim", description="Оформить приз (спишутся ФЭБарт)"),
+    BotCommand(command="request", description="Заявка на начисление ФЭБарт (решение в админке)"),
     BotCommand(command="cancel", description="Отменить текущий ввод (ФИО, заявку и т.д.)"),
 ]
 
 STAFF_EXTRA_COMMANDS: list[BotCommand] = [
-    BotCommand(command="award", description="Начислить ФЭБ за интерактив (ответственный / орг)"),
+    BotCommand(command="award", description="Начислить ФЭБарт за интерактив (ответственный / орг)"),
     BotCommand(command="handout", description="Отметить выдачу приза по номеру заявки"),
     BotCommand(command="sync", description="Синхронизация с Google Таблицами (оргкомитет)"),
     BotCommand(

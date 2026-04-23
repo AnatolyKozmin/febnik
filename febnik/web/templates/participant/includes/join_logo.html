@@ -1,0 +1,13 @@
+  <div class="feb-logo-reg">
+    <img
+      class="feb-logo-img"
+      src="/static/brand/logo-registration.png"
+      width="720"
+      height="720"
+      alt="ББ ФЭБник"
+      decoding="async"
+      fetchpriority="high"
+      onerror="this.replaceWith(document.getElementById('feb-logo-svg-fallback').content.cloneNode(true))"
+    >
+    <template id="feb-logo-svg-fallback">{% include "participant/includes/logo-registration.svg" %}</template>
+  </div>

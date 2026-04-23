@@ -138,16 +138,16 @@ async def admin_award_from_qr(
         try:
             award_amount = int(raw)
         except ValueError:
-            request.session["flash"] = "Укажите целое число ФЭБ."
+            request.session["flash"] = "Укажите целое число ФЭБарт."
             return RedirectResponse(url="/admin/", status_code=302)
     else:
         award_amount = act.reward_feb
 
     if award_amount < 1:
-        request.session["flash"] = "Сумма начисления должна быть не меньше 1 ФЭБ."
+        request.session["flash"] = "Сумма начисления должна быть не меньше 1 ФЭБарт."
         return RedirectResponse(url="/admin/", status_code=302)
     if award_amount > settings.max_qr_award_feb:
-        request.session["flash"] = f"Слишком много: максимум {settings.max_qr_award_feb} ФЭБ за одно начисление."
+        request.session["flash"] = f"Слишком много: максимум {settings.max_qr_award_feb} ФЭБарт за одно начисление."
         return RedirectResponse(url="/admin/", status_code=302)
 
     tx = await apply_interactive_reward(
@@ -155,7 +155,7 @@ async def admin_award_from_qr(
         user,
         award_amount,
         act.id,
-        note=f"Интерактив: {act.name} (QR), заявлено {award_amount} ФЭБ",
+        note=f"Интерактив: {act.name} (QR), заявлено {award_amount} ФЭБарт",
     )
     await session.flush()
     settings = get_settings()
@@ -175,7 +175,7 @@ async def admin_award_from_qr(
         logger.exception("sheets log (award QR)")
 
     request.session["flash"] = (
-        f"Начислено {award_amount} ФЭБ участнику {user.full_name} за «{act.name}». Баланс: {user.balance_feb}."
+        f"Начислено {award_amount} ФЭБарт участнику {user.full_name} за «{act.name}». Баланс: {user.balance_feb}."
     )
     return RedirectResponse(url="/admin/", status_code=302)
 
@@ -409,7 +409,7 @@ async def admin_user_set_balance(
         except Exception:
             logger.exception("sheets log (admin balance set)")
         request.session["flash"] = (
-            f"Баланс {user.full_name}: {user.balance_feb} ФЭБ (изменение {tx.delta:+d})."
+            f"Баланс {user.full_name}: {user.balance_feb} ФЭБарт (изменение {tx.delta:+d})."
         )
     else:
         request.session["flash"] = "Значение не изменилось."
@@ -479,8 +479,8 @@ async def admin_balance_request_approve(request: Request, session: DbSession, ri
     if user and user.telegram_id > 0:
         await send_user_message(
             user.telegram_id,
-            f"Заявка №{rid} одобрена: начислено {req.amount_feb} ФЭБ. "
-            f"Ваш баланс: {user.balance_feb} ФЭБ.",
+            f"Заявка №{rid} одобрена: начислено {req.amount_feb} ФЭБарт. "
+            f"Ваш баланс: {user.balance_feb} ФЭБарт.",
         )
         request.session["flash"] = f"Заявка №{rid} одобрена, участник уведомлён в Telegram."
     else:
@@ -507,7 +507,7 @@ async def admin_balance_request_reject(
         return RedirectResponse(url="/admin/balance-requests", status_code=302)
     user = await session.get(User, req.user_id)
     if user and user.telegram_id > 0:
-        text = f"Заявка №{rid} на {req.amount_feb} ФЭБ отклонена."
+        text = f"Заявка №{rid} на {req.amount_feb} ФЭБарт отклонена."
         rr = (reason or "").strip()
         if rr:
             text += f" Комментарий: {rr}"
@@ -524,9 +524,9 @@ async def export_balances_csv(session: DbSession) -> Response:
     users = r.scalars().all()
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["ФИО", "username", "telegram_id", "balance_feb"])
+    w.writerow(["ФИО", "email", "username", "telegram_id", "balance_feb"])
     for u in users:
-        w.writerow([u.full_name, u.username or "", u.telegram_id, u.balance_feb])
+        w.writerow([u.full_name, u.email or "", u.username or "", u.telegram_id, u.balance_feb])
     data = buf.getvalue().encode("utf-8-sig")
     return Response(
         content=data,

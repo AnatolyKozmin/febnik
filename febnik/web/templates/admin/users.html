@@ -10,12 +10,13 @@
   <div class="table-wrap">
   <table>
     <thead>
-      <tr><th>ФИО</th><th>Username</th><th>Telegram ID</th><th>Баланс ФЭБ</th></tr>
+      <tr><th>ФИО</th><th>Почта</th><th>Username</th><th>Telegram ID</th><th>Баланс (ФЭБарт)</th></tr>
     </thead>
     <tbody>
       {% for u in users %}
       <tr>
         <td>{{ u.full_name }}</td>
+        <td>{{ u.email or '—' }}</td>
         <td>@{{ u.username or '—' }}</td>
         <td>{{ u.telegram_id }}</td>
         <td>

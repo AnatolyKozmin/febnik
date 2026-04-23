@@ -46,7 +46,7 @@ async def cmd_activities(message: Message, session: AsyncSession) -> None:
     for a in rows:
         d = a.event_date.strftime("%d.%m.%Y") if a.event_date else "—"
         t = a.time_text or ""
-        lines.append(f"• {a.name} — {d} {t} — {a.reward_feb} ФЭБ")
+        lines.append(f"• {a.name} — {d} {t} — {a.reward_feb} ФЭБарт")
     await message.answer("\n".join(lines))
 
 
@@ -59,6 +59,6 @@ async def cmd_prizes(message: Message, session: AsyncSession) -> None:
         return
     lines = ["Призы (стоимость в ФЭБартах, остаток):\n"]
     for p in prizes:
-        lines.append(f"• {p.name} — {p.cost_feb} ФЭБ, в наличии: {p.stock}")
+        lines.append(f"• {p.name} — {p.cost_feb} ФЭБарт, в наличии: {p.stock}")
     lines.append("\nОформление: /claim")
     await message.answer("\n".join(lines))

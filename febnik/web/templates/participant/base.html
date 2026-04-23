@@ -10,19 +10,21 @@
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
   <style>
     :root {
-      /* Палитра в духе брендбука «ФЭБ» (при необходимости подставьте точные HEX из Figma) */
-      --feb-forest: #0c3229;
-      --feb-green: #1a6b4a;
-      --feb-mint: #e6f2ec;
+      /* Палитра из Figma (node 8083:69 «цвета») — бордо, графит, сланец, без зелёного */
+      --feb-graphite: #282828;
+      --feb-bordeaux: #69090b;
+      --feb-bordeaux-hover: #560708;
+      --feb-slate: #607190;
       --feb-page-bg: #fef0db;
-      --feb-cream: #f7faf7;
+      --feb-surface-warm: #f8f5f2;
+      --feb-cream: #fafbd3;
       --feb-gold: #c49a4a;
       --feb-text: #282828;
-      --feb-muted: #4a5c54;
+      --feb-muted: #5c6478;
       --feb-card: #ffffff;
-      --feb-border: rgba(12, 50, 41, 0.12);
+      --feb-border: rgba(40, 40, 40, 0.1);
       --feb-radius: 16px;
-      --feb-shadow: 0 8px 32px rgba(12, 50, 41, 0.08);
+      --feb-shadow: 0 8px 32px rgba(40, 40, 40, 0.07);
       --font-display: "Montserrat", system-ui, sans-serif;
       --font-body: "Source Sans 3", system-ui, sans-serif;
       --feb-accent: #d787a4;
@@ -47,14 +49,14 @@
       color: var(--feb-text);
       /* Текстура «шёлк» + лёгкие градиенты поверх (альфа небольшая — иначе шёлк не виден) */
       background:
-        radial-gradient(120% 80% at 100% 0%, rgba(26, 107, 74, 0.14) 0%, transparent 55%) fixed,
-        radial-gradient(90% 60% at 0% 100%, rgba(196, 154, 74, 0.1) 0%, transparent 50%) fixed,
+        radial-gradient(120% 80% at 100% 0%, rgba(105, 9, 11, 0.07) 0%, transparent 55%) fixed,
+        radial-gradient(90% 60% at 0% 100%, rgba(96, 113, 144, 0.1) 0%, transparent 50%) fixed,
         linear-gradient(180deg, rgba(254, 240, 219, 0.4) 0%, rgba(254, 240, 219, 0.35) 100%) fixed,
         url("/static/brand/sholk-bg.svg") center center / cover no-repeat fixed;
       background-color: var(--feb-page-bg);
     }
-    a { color: var(--feb-green); font-weight: 600; text-decoration: none; }
-    a:hover { text-decoration: underline; }
+    a { color: var(--feb-bordeaux); font-weight: 600; text-decoration: none; }
+    a:hover { color: var(--feb-bordeaux-hover); text-decoration: underline; }
 
     .feb-main {
       max-width: 520px;
@@ -83,8 +85,8 @@
     .feb-flash {
       padding: 0.75rem 1rem;
       border-radius: 12px;
-      background: rgba(26, 107, 74, 0.1);
-      border: 1px solid rgba(26, 107, 74, 0.2);
+      background: rgba(105, 9, 11, 0.08);
+      border: 1px solid rgba(105, 9, 11, 0.18);
       color: var(--feb-text);
       margin-bottom: 1rem;
       font-weight: 500;
@@ -107,11 +109,11 @@
       font-weight: 600;
       line-height: 1.25;
       cursor: pointer;
-      background: linear-gradient(180deg, #1f7450 0%, #145a3f 48%, #124f37 100%);
+      background: linear-gradient(180deg, #8a1e22 0%, #69090b 48%, #560708 100%);
       color: #fff;
       box-shadow:
         0 1px 0 rgba(255, 255, 255, 0.12) inset,
-        0 4px 14px rgba(26, 107, 74, 0.38);
+        0 4px 14px rgba(105, 9, 11, 0.35);
       -webkit-tap-highlight-color: transparent;
       user-select: none;
       transition: filter 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
@@ -127,7 +129,7 @@
     }
     a.feb-btn:hover { text-decoration: none; }
     .feb-btn:focus-visible {
-      outline: 2px solid rgba(26, 107, 74, 0.55);
+      outline: 2px solid rgba(105, 9, 11, 0.55);
       outline-offset: 3px;
     }
     .feb-btn-accent {
@@ -164,8 +166,8 @@
         0 0 0 4px rgba(215, 135, 164, 0.35);
     }
     .feb-btn-secondary {
-      background: var(--feb-forest);
-      box-shadow: 0 2px 12px rgba(12, 50, 41, 0.25);
+      background: var(--feb-graphite);
+      box-shadow: 0 2px 12px rgba(40, 40, 40, 0.25);
     }
     .feb-btn-ghost {
       background: rgba(255, 255, 255, 0.12);
@@ -194,22 +196,22 @@
       min-height: auto;
       line-height: 1.3;
       border-radius: 999px;
-      color: var(--feb-green);
-      border: 1.5px solid rgba(26, 107, 74, 0.32);
+      color: var(--feb-bordeaux);
+      border: 1.5px solid rgba(105, 9, 11, 0.32);
       background: rgba(255, 255, 255, 0.35);
       box-shadow: none;
     }
     .feb-btn-ghost.feb-btn-sm:hover {
       background: rgba(255, 255, 255, 0.55);
-      border-color: rgba(26, 107, 74, 0.42);
-      color: var(--feb-green);
+      border-color: rgba(105, 9, 11, 0.42);
+      color: var(--feb-bordeaux);
     }
     .feb-btn-ghost:focus-visible {
       outline: 2px solid rgba(40, 40, 40, 0.28);
       outline-offset: 3px;
     }
     .feb-btn-ghost.feb-btn-sm:focus-visible {
-      outline-color: rgba(26, 107, 74, 0.45);
+      outline-color: rgba(105, 9, 11, 0.45);
     }
 
     label { display: block; margin-top: 1rem; font-weight: 600; color: var(--feb-muted); font-size: 0.9rem; }
@@ -225,8 +227,8 @@
     }
     input:focus, select:focus, textarea:focus {
       outline: none;
-      border-color: var(--feb-green);
-      box-shadow: 0 0 0 3px rgba(26, 107, 74, 0.15);
+      border-color: var(--feb-bordeaux);
+      box-shadow: 0 0 0 3px rgba(105, 9, 11, 0.12);
       background: #fff;
     }
 
@@ -234,7 +236,7 @@
       font-family: var(--font-display);
       font-size: 2rem;
       font-weight: 700;
-      color: var(--feb-green);
+      color: var(--feb-bordeaux);
       letter-spacing: -0.03em;
     }
     .feb-links { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1.25rem; }
@@ -248,7 +250,7 @@
       text-decoration: none;
       font-weight: 600;
     }
-    .feb-links a.feb-tile:hover { border-color: rgba(26, 107, 74, 0.35); background: #fff; }
+    .feb-links a.feb-tile:hover { border-color: rgba(105, 9, 11, 0.28); background: #fff; }
     .feb-links a.feb-tile span { display: block; font-size: 0.85rem; font-weight: 400; color: var(--feb-muted); margin-top: 0.2rem; }
 
     .feb-cabinet-hero {

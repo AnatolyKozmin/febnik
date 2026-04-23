@@ -1,12 +1,17 @@
-# На сервере рядом с arkadium-edge-nginx (сеть arkadium_shared):
+# На сервере (рядом с arkadium-edge-nginx, сеть arkadium_shared):
 #   docker compose -f docker-compose.yml -f docker-compose.server.yml up -d --build
 #
-# Локально этот файл не подключай — сеть external отсутствует.
+# Локально этот файл не подключай.
 
 services:
   febnik:
+    # Явно две сети: проектная (порты/volume как в базовом compose) + общая с nginx
     networks:
+      - default
       - arkadium_shared
+    # Запасной путь для nginx: с хоста на 127.0.0.1:18081 (см. комментарий внизу)
+    ports:
+      - "127.0.0.1:18081:8080"
 
 networks:
   arkadium_shared:

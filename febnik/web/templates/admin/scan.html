@@ -5,7 +5,7 @@
   .scan-page { max-width: 520px; margin: 0 auto; }
   .scan-hero {
     text-align: center;
-    margin-bottom: 1.25rem;
+    margin-bottom: 0.85rem;
   }
   .scan-hero h1 {
     margin: 0 0 0.35rem 0;
@@ -13,6 +13,11 @@
     letter-spacing: -0.02em;
   }
   .scan-hero p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 1.45; }
+  @media (max-width: 540px) {
+    .scan-hero { margin-bottom: 0.5rem; }
+    .scan-hero h1 { font-size: 1.12rem; }
+    .scan-hero p { font-size: 0.82rem; line-height: 1.35; }
+  }
   #qr-reader {
     border-radius: var(--radius);
     overflow: hidden;
@@ -73,18 +78,19 @@
 </style>
 
 <div class="card scan-page">
-  <div class="toolbar">
+  <div class="toolbar" style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;justify-content:space-between;">
     <a href="/admin/" class="btn btn-secondary btn-sm">← Панель</a>
+    <span class="muted" style="font-size:0.82rem;">После начисления вы снова здесь</span>
   </div>
 
   <div class="scan-hero">
     <h1>Сканер билета</h1>
-    <p>Наведите камеру на QR участника — откроется начисление ФЭБарт. Нужны права организатора и доступ к камере (HTTPS или localhost).</p>
+    <p>Камера → QR участника → сумма → снова сканер. Организатор и HTTPS (или localhost).</p>
   </div>
 
   <div id="scan-status" class="scan-status" role="status" aria-live="polite"></div>
 
-  <div id="qr-reader"></div>
+  <div id="qr-reader" style="scroll-margin-top: 0.75rem;"></div>
   <p class="scan-hint">Код тот же, что в «Мой QR» в кабинете: <code style="font-size:0.8rem;">{{ panel_url }}/scan?t=…</code></p>
 
   <details class="scan-fallback">
@@ -122,7 +128,7 @@
 
   function goToScan(token) {
     if (!token) return;
-    window.location.href = "/scan?t=" + encodeURIComponent(token);
+    window.location.href = "/scan?t=" + encodeURIComponent(token) + "#award";
   }
 
   function showStatus(msg, ok) {
@@ -191,6 +197,13 @@
   function onScanFailure() {}
 
   scanner.render(onScanSuccess, onScanFailure);
+
+  if (window.matchMedia && window.matchMedia("(max-width: 640px)").matches) {
+    setTimeout(function () {
+      var el = document.getElementById("qr-reader");
+      if (el) el.scrollIntoView({ block: "start", behavior: "smooth" });
+    }, 400);
+  }
 })();
 </script>
 {% endblock %}

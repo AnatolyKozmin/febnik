@@ -129,25 +129,25 @@ async def admin_award_from_qr(
     uid = parse_participant_scan_token(t.strip())
     if uid is None:
         request.session["flash"] = "Недействительная ссылка начисления."
-        return RedirectResponse(url="/admin/", status_code=302)
+        return RedirectResponse(url="/admin/scan", status_code=302)
     user = await session.get(User, uid)
     if not user or not is_web_user(user):
         request.session["flash"] = "Участник не найден или не веб-профиль."
-        return RedirectResponse(url="/admin/", status_code=302)
+        return RedirectResponse(url="/admin/scan", status_code=302)
 
     raw = (amount_feb or "").strip()
     try:
         award_amount = int(raw)
     except ValueError:
         request.session["flash"] = "Укажите целое число ФЭБарт."
-        return RedirectResponse(url="/admin/", status_code=302)
+        return RedirectResponse(url="/scan?" + urlencode({"t": t.strip()}), status_code=302)
 
     if award_amount < 1:
         request.session["flash"] = "Сумма начисления должна быть не меньше 1 ФЭБарт."
-        return RedirectResponse(url="/admin/", status_code=302)
+        return RedirectResponse(url="/scan?" + urlencode({"t": t.strip()}), status_code=302)
     if award_amount > settings.max_qr_award_feb:
         request.session["flash"] = f"Слишком много: максимум {settings.max_qr_award_feb} ФЭБарт за одно начисление."
-        return RedirectResponse(url="/admin/", status_code=302)
+        return RedirectResponse(url="/scan?" + urlencode({"t": t.strip()}), status_code=302)
 
     tx = await apply_participant_scan_reward(
         session,
@@ -172,9 +172,9 @@ async def admin_award_from_qr(
         logger.exception("sheets log (award QR)")
 
     request.session["flash"] = (
-        f"Начислено {award_amount} ФЭБарт участнику {user.full_name}. Баланс: {user.balance_feb}."
+        f"Начислено {award_amount} ФЭБарт — {user.full_name}. Баланс: {user.balance_feb}. Сканируйте следующий билет."
     )
-    return RedirectResponse(url="/admin/", status_code=302)
+    return RedirectResponse(url="/admin/scan", status_code=302)
 
 
 @router.get("/admin/", response_class=HTMLResponse)

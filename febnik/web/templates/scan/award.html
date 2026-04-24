@@ -1,29 +1,169 @@
 {% extends "participant/base.html" %}
 {% block title %}Начисление — ФЭБник{% endblock %}
+{% block head %}
+<style>
+  .feb-award-flow {
+    padding-bottom: max(5.5rem, env(safe-area-inset-bottom, 0px));
+  }
+  .feb-award-topbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin: -0.5rem -0.25rem 0.75rem;
+    padding: 0.35rem 0;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: linear-gradient(180deg, var(--feb-page-bg) 70%, transparent);
+  }
+  .feb-award-topbar a {
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+    padding: 0.55rem 0.75rem;
+    border-radius: 12px;
+    border: 1.5px solid rgba(105, 9, 11, 0.28);
+    background: rgba(255, 255, 255, 0.85);
+    font-size: 0.92rem;
+    text-decoration: none;
+    color: var(--feb-bordeaux);
+  }
+  .feb-award-topbar a:hover {
+    background: #fff;
+  }
+  .feb-award-card h1 {
+    font-size: 1.1rem;
+    margin-bottom: 0.35rem;
+  }
+  .feb-award-who {
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin: 0 0 0.15rem 0;
+    line-height: 1.25;
+  }
+  .feb-award-balance {
+    font-size: 0.92rem;
+    color: var(--feb-muted);
+    margin: 0 0 0.5rem 0;
+  }
+  .feb-award-form label {
+    margin-top: 0.5rem;
+    font-size: 1rem;
+  }
+  #amount_feb {
+    font-size: 1.65rem;
+    font-weight: 700;
+    text-align: center;
+    padding: 0.85rem 1rem;
+    margin-top: 0.5rem;
+    letter-spacing: 0.02em;
+  }
+  .feb-award-hint {
+    font-size: 0.88rem;
+    color: var(--feb-muted);
+    margin-top: 0.4rem;
+    line-height: 1.35;
+  }
+  .feb-award-sticky {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    padding: 0.65rem max(1rem, env(safe-area-inset-left)) calc(0.65rem + env(safe-area-inset-bottom));
+    padding-right: max(1rem, env(safe-area-inset-right));
+    background: linear-gradient(0deg, var(--feb-page-bg) 55%, rgba(254, 240, 219, 0.92));
+    border-top: 1px solid var(--feb-border);
+    box-shadow: 0 -6px 24px rgba(40, 40, 40, 0.06);
+  }
+  .feb-award-sticky .feb-main-inner {
+    max-width: 520px;
+    margin: 0 auto;
+  }
+  .feb-award-sticky button.feb-btn {
+    width: 100%;
+    padding: 0.9rem 1rem;
+    font-size: 1.05rem;
+  }
+  .feb-award-sticky .feb-award-skip {
+    display: block;
+    text-align: center;
+    margin-top: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+  #award {
+    scroll-margin-top: 0.5rem;
+  }
+</style>
+{% endblock %}
 {% block content %}
-<div class="feb-card">
+<div class="feb-card feb-award-flow feb-award-card">
+  {% if is_admin %}
+  <div class="feb-award-topbar">
+    <a href="/admin/scan">← Следующий билет</a>
+  </div>
+
+  <h1>Начисление</h1>
+  <p class="feb-award-who">{{ user.full_name }}</p>
+  <p class="feb-award-balance">Баланс сейчас: <strong>{{ user.balance_feb }}</strong> ФЭБарт</p>
+
+  <form id="award" method="post" action="/admin/award-from-qr" class="feb-award-form">
+    <input type="hidden" name="t" value="{{ token }}">
+    <label for="amount_feb">ФЭБарт начислить</label>
+    <input type="number" name="amount_feb" id="amount_feb" required min="1" max="{{ max_qr_award_feb }}" step="1"
+      value="1"
+      inputmode="numeric" autocomplete="off">
+    <p class="feb-award-hint">Максимум за раз: {{ max_qr_award_feb }}. Сумма запоминается на этом устройстве до закрытия вкладки.</p>
+  </form>
+
+  <div class="feb-award-sticky">
+    <div class="feb-main-inner">
+      <button type="submit" class="feb-btn feb-btn-accent" form="award">Начислить</button>
+      <a class="feb-award-skip" href="/admin/scan">Без начисления — к сканеру</a>
+    </div>
+  </div>
+  <script>
+  (function () {
+    var form = document.getElementById("award");
+    var input = document.getElementById("amount_feb");
+    var key = "febnik_last_qr_amount";
+    if (input) {
+      var saved = sessionStorage.getItem(key);
+      if (saved && /^[1-9][0-9]*$/.test(saved)) {
+        var n = parseInt(saved, 10);
+        var mx = parseInt(input.getAttribute("max") || "999999", 10);
+        if (n >= 1 && n <= mx) input.value = String(n);
+      }
+      input.addEventListener("change", function () { sessionStorage.setItem(key, input.value); });
+      if (form) {
+        form.addEventListener("submit", function () { sessionStorage.setItem(key, input.value); });
+      }
+      setTimeout(function () {
+        try {
+          input.focus({ preventScroll: true });
+        } catch (e) {
+          input.focus();
+        }
+        var el = document.getElementById("award");
+        if (el && (location.hash === "#award" || window.matchMedia("(max-width: 640px)").matches)) {
+          el.scrollIntoView({ block: "center", behavior: "auto" });
+        }
+      }, 80);
+    }
+  })();
+  </script>
+  {% else %}
   <h1>Участник</h1>
   <p style="font-size:1.15rem;font-weight:600;">{{ user.full_name }}</p>
   <p class="feb-muted">Баланс: {{ user.balance_feb }} ФЭБарт</p>
-
-  {% if is_admin %}
-    <form method="post" action="/admin/award-from-qr" style="margin-top:1.25rem;">
-      <input type="hidden" name="t" value="{{ token }}">
-      <label for="amount_feb">Сколько начислить, ФЭБарт</label>
-      <input type="number" name="amount_feb" id="amount_feb" required min="1" max="{{ max_qr_award_feb }}" step="1"
-        value="1"
-        inputmode="numeric">
-      <p class="feb-muted" style="margin-top:0.35rem;font-size:0.9rem;">Максимум за одно начисление: {{ max_qr_award_feb }} ФЭБарт (лимит задаётся в настройках сервера).</p>
-      <p style="margin-top:1.25rem;"><button type="submit" class="feb-btn" style="width:100%;">Начислить</button></p>
-    </form>
-    <p style="margin-top:1rem;"><a href="/admin/">Админка</a></p>
-  {% else %}
-    <div class="feb-flash" style="margin-top:1rem;">
-      Чтобы начислить баллы, войдите как организатор (логин оргкомитета).
-    </div>
-    <p style="margin-top:1.25rem;">
-      <a href="{{ login_url }}" class="feb-btn" style="width:100%;text-align:center;display:block;box-sizing:border-box;text-decoration:none;">Войти</a>
-    </p>
+  <div class="feb-flash" style="margin-top:1rem;">
+    Чтобы начислить баллы, войдите как организатор (логин оргкомитета).
+  </div>
+  <p style="margin-top:1.25rem;">
+    <a href="{{ login_url }}" class="feb-btn" style="width:100%;text-align:center;display:block;box-sizing:border-box;text-decoration:none;">Войти</a>
+  </p>
   {% endif %}
 </div>
 {% endblock %}

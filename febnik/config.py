@@ -59,6 +59,8 @@ class Settings(BaseSettings):
     participant_token_max_age_seconds: int = 10 * 365 * 24 * 3600
     # В проде за HTTPS включите true — cookie только по TLS.
     web_cookie_secure: bool = False
+    # Каталог для плашек кабинета (день 1–3). В Docker задайте, например, /data/cabinet_banners
+    cabinet_banners_dir: str = "uploads/cabinet_banners"
 
     @model_validator(mode="after")
     def _require_bot_token_if_bot(self) -> "Settings":

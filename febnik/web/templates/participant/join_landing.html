@@ -1,0 +1,10 @@
+{% extends "participant/join_layout.html" %}
+{% block join_title %}Вход — ФЭБник{% endblock %}
+{% block join_inner %}
+  <p class="feb-muted" style="text-align:center;margin:0 0 0.5rem;">Быстрый вход без почты и пароля</p>
+  <div class="feb-join-choices">
+    <a class="feb-btn feb-btn-accent" href="/join/first">Первый раз здесь</a>
+    <a class="feb-btn feb-btn-accent" href="/join/return">Уже регистрировался</a>
+  </div>
+  <p class="feb-muted" style="text-align:center;margin-top:1.25rem;font-size:0.9rem;">При первом визите укажите ФИО и номер студенческого билета. При следующем входе снова введите тот же номер билета.</p>
+{% endblock %}

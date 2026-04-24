@@ -12,6 +12,7 @@ services:
     environment:
       # Персистентная БД в именованном volume
       DATABASE_URL: sqlite+aiosqlite:////data/febnik.db
+      CABINET_BANNERS_DIR: /data/cabinet_banners
       WEB_HOST: "0.0.0.0"
       WEB_PORT: "8080"
     ports:

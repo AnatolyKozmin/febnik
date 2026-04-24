@@ -26,3 +26,9 @@ async def apply_sqlite_migrations(connection: AsyncConnection) -> None:
     if ucols and "email" not in ucols:
         await connection.execute(text("ALTER TABLE users ADD COLUMN email VARCHAR(255)"))
         await connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_users_email ON users(email)"))
+    if ucols and "web_pin_hash" not in ucols:
+        await connection.execute(text("ALTER TABLE users ADD COLUMN web_pin_hash VARCHAR(64)"))
+        await connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_users_web_pin_hash ON users(web_pin_hash)"))
+    if ucols and "student_ticket" not in ucols:
+        await connection.execute(text("ALTER TABLE users ADD COLUMN student_ticket VARCHAR(64)"))
+        await connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_users_student_ticket ON users(student_ticket)"))

@@ -1,0 +1,16 @@
+{% extends "participant/join_layout.html" %}
+{% block join_title %}Регистрация — ФЭБник{% endblock %}
+{% block join_inner %}
+  <form method="post" action="/join/first">
+    <label class="feb-join-name-label" for="fn">Фамилия и имя</label>
+    <p class="feb-muted" style="text-align:center;margin:0.35rem 0 0.75rem;font-size:0.95rem;">Как вас будут звать в кабинете и у организаторов</p>
+    <input id="fn" class="feb-join-name-input" type="text" name="full_name" required maxlength="512" autocomplete="name" placeholder="Иванов Иван">
+    <label class="feb-join-name-label" for="st" style="margin-top:1.25rem;">Номер студенческого билета</label>
+    <p class="feb-muted" style="text-align:center;margin:0.35rem 0 0.75rem;font-size:0.95rem;">Тот же номер, что в билете (как написано, без пробелов в начале и в конце)</p>
+    <input id="st" class="feb-join-name-input" type="text" name="student_ticket" required maxlength="64" autocomplete="off" placeholder="Например, 12345678">
+    <p style="margin-top:1.5rem;">
+      <button type="submit" class="feb-btn feb-btn-accent" style="width:100%;">В кабинет</button>
+    </p>
+  </form>
+  <p style="margin-top:1rem;text-align:center;"><a href="/join">Назад</a></p>
+{% endblock %}

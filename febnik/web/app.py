@@ -9,6 +9,7 @@ from starlette.responses import RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 
 from febnik.config import get_settings
+from febnik.services.cabinet_banners import ensure_banners_dir
 from febnik.web.routes_admin import router as admin_router
 from febnik.web.routes_participant import router as participant_router
 from febnik.web.routes_public import router as public_router
@@ -50,4 +51,10 @@ def create_app() -> FastAPI:
     _static = Path(__file__).resolve().parent / "static"
     if _static.is_dir():
         app.mount("/static", StaticFiles(directory=str(_static)), name="static")
+    _banner_root = ensure_banners_dir(settings)
+    app.mount(
+        "/media/cabinet-banners",
+        StaticFiles(directory=str(_banner_root)),
+        name="cabinet_banners",
+    )
     return app

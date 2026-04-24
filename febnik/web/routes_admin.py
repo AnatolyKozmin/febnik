@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Form, Query, Request
+from fastapi import APIRouter, File, Form, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
@@ -17,6 +17,7 @@ from febnik.db.models import (
     Activity,
     BalanceRequest,
     BalanceRequestStatus,
+    CabinetDayBanner,
     Claim,
     ClaimStatus,
     Prize,
@@ -32,7 +33,13 @@ from febnik.services.balance import (
 from febnik.services.qr_token import parse_participant_scan_token
 from febnik.services.sheets import append_log_row_async
 from febnik.services.telegram_notify import send_user_message
-from febnik.services.user_web import is_web_user
+from febnik.services.cabinet_banners import (
+    all_day_banner_urls,
+    get_or_create_web_state,
+    resolve_banners_root,
+    save_day_banner,
+)
+from febnik.services.user_web import is_web_user, normalize_student_ticket
 from febnik.web.deps import DbSession, panel_base_url
 
 logger = logging.getLogger(__name__)
@@ -205,6 +212,73 @@ async def admin_dashboard(request: Request, session: DbSession) -> HTMLResponse:
             bot_enabled=settings.bot_enabled,
         ),
     )
+
+
+@router.get("/admin/cabinet-banners", response_class=HTMLResponse)
+async def admin_cabinet_banners_get(request: Request, session: DbSession) -> HTMLResponse:
+    settings = get_settings()
+    state = await get_or_create_web_state(session)
+    previews = await all_day_banner_urls(session, settings)
+    return templates.TemplateResponse(
+        "admin/cabinet_banners.html",
+        _ctx(
+            request,
+            active_day=state.cabinet_banner_active_day,
+            previews=previews,
+        ),
+    )
+
+
+@router.post("/admin/cabinet-banners/active")
+async def admin_cabinet_banners_set_active(
+    request: Request,
+    session: DbSession,
+    active_day: str = Form(""),
+) -> RedirectResponse:
+    st = await get_or_create_web_state(session)
+    raw = (active_day or "").strip().lower()
+    if raw in ("", "none", "0"):
+        st.cabinet_banner_active_day = None
+    elif raw in ("1", "2", "3"):
+        d = int(raw)
+        st.cabinet_banner_active_day = d
+        rec = await session.get(CabinetDayBanner, d)
+        settings = get_settings()
+        if not rec:
+            request.session["flash"] = f"Сначала загрузите картинку для дня {d}."
+            return RedirectResponse(url="/admin/cabinet-banners", status_code=302)
+        if not (resolve_banners_root(settings) / rec.file_name).is_file():
+            request.session["flash"] = f"Файл плашки дня {d} не найден на диске. Загрузите снова."
+            return RedirectResponse(url="/admin/cabinet-banners", status_code=302)
+    else:
+        request.session["flash"] = "Некорректный выбор дня."
+        return RedirectResponse(url="/admin/cabinet-banners", status_code=302)
+    await session.flush()
+    if st.cabinet_banner_active_day is None:
+        request.session["flash"] = "Плашка в кабинете отключена."
+    else:
+        request.session["flash"] = f"В кабинете показывается плашка дня {st.cabinet_banner_active_day}."
+    return RedirectResponse(url="/admin/cabinet-banners", status_code=302)
+
+
+@router.post("/admin/cabinet-banners/upload")
+async def admin_cabinet_banners_upload(
+    request: Request,
+    session: DbSession,
+    day: int = Form(...),
+    file: UploadFile = File(...),
+) -> RedirectResponse:
+    if day not in (1, 2, 3):
+        request.session["flash"] = "День должен быть 1, 2 или 3."
+        return RedirectResponse(url="/admin/cabinet-banners", status_code=302)
+    try:
+        await save_day_banner(session, day, file, get_settings())
+        await session.flush()
+    except ValueError as e:
+        request.session["flash"] = str(e)
+        return RedirectResponse(url="/admin/cabinet-banners", status_code=302)
+    request.session["flash"] = f"Картинка для дня {day} сохранена."
+    return RedirectResponse(url="/admin/cabinet-banners", status_code=302)
 
 
 @router.get("/admin/scan", response_class=HTMLResponse)
@@ -416,6 +490,36 @@ async def admin_user_set_balance(
     return RedirectResponse(url="/admin/users", status_code=302)
 
 
+@router.post("/admin/users/{uid}/set-student-ticket")
+async def admin_user_set_student_ticket(
+    request: Request,
+    session: DbSession,
+    uid: int,
+    student_ticket: str = Form(""),
+) -> RedirectResponse:
+    user = await session.get(User, uid)
+    if not user:
+        request.session["flash"] = "Участник не найден."
+        return RedirectResponse(url="/admin/users", status_code=302)
+    ticket = normalize_student_ticket(student_ticket)
+    if not ticket:
+        user.student_ticket = None
+    else:
+        if len(ticket) > 64:
+            request.session["flash"] = "Номер студенческого билета слишком длинный."
+            return RedirectResponse(url="/admin/users", status_code=302)
+        dup = await session.execute(
+            select(User.id).where(User.student_ticket == ticket, User.id != uid)
+        )
+        if dup.scalar_one_or_none() is not None:
+            request.session["flash"] = "Такой номер студенческого билета уже указан у другого участника."
+            return RedirectResponse(url="/admin/users", status_code=302)
+        user.student_ticket = ticket
+    await session.flush()
+    request.session["flash"] = f"Студенческий билет для «{user.full_name}» сохранён."
+    return RedirectResponse(url="/admin/users", status_code=302)
+
+
 @router.get("/admin/transactions", response_class=HTMLResponse)
 async def admin_transactions(request: Request, session: DbSession) -> HTMLResponse:
     r = await session.execute(
@@ -524,9 +628,9 @@ async def export_balances_csv(session: DbSession) -> Response:
     users = r.scalars().all()
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["ФИО", "email", "username", "telegram_id", "balance_feb"])
+    w.writerow(["ФИО", "email", "student_ticket", "username", "telegram_id", "balance_feb"])
     for u in users:
-        w.writerow([u.full_name, u.email or "", u.username or "", u.telegram_id, u.balance_feb])
+        w.writerow([u.full_name, u.email or "", u.student_ticket or "", u.username or "", u.telegram_id, u.balance_feb])
     data = buf.getvalue().encode("utf-8-sig")
     return Response(
         content=data,

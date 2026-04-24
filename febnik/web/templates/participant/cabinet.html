@@ -23,13 +23,18 @@
   <div class="feb-cabinet-hero">
     <h1 style="font-size: 1.25rem; margin-bottom: 0.35rem;">Привет{% if user.full_name %}, {{ user.full_name }}{% endif %}</h1>
     {% if user.email %}
-    <p class="feb-muted" style="margin: 0 0 0.35rem; font-size: 0.9rem;">Вход по почте: {{ user.email }}</p>
+    <p class="feb-muted" style="margin: 0 0 0.35rem; font-size: 0.9rem;">Почта в профиле: {{ user.email }}</p>
     {% endif %}
     <p class="feb-muted" style="margin: 0 0 0.35rem;">Баланс</p>
     <div class="feb-balance">{{ user.balance_feb }} <span style="font-size:1rem;font-weight:600;color:var(--feb-muted);">ФЭБарт</span></div>
   </div>
   {% if flash_cabinet %}
   <div class="feb-flash" style="margin-top: 0.75rem;">{{ flash_cabinet }}</div>
+  {% endif %}
+  {% if cabinet_banner_url %}
+  <div class="feb-cabinet-banner" style="margin-top:1rem;">
+    <img src="{{ cabinet_banner_url }}" alt="" style="display:block;width:100%;max-width:100%;height:auto;border-radius:12px;">
+  </div>
   {% endif %}
 
   <nav class="feb-cabinet-actions" aria-label="Основные разделы">

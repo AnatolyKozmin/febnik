@@ -6,17 +6,23 @@
     <h1 style="margin:0; flex:1;">Участники</h1>
     <a href="/admin/" class="btn btn-secondary btn-sm">Назад</a>
   </div>
-  <p class="muted" style="margin:0 0 0.75rem 0;">Баланс можно изменить вручную: введите новое значение и нажмите «Сохранить».</p>
+  <p class="muted" style="margin:0 0 0.75rem 0;">Баланс и номер студенческого билета меняются в строке участника. Пустое поле билета и «Сохранить» — сброс номера. Один номер не может быть у двух человек.</p>
   <div class="table-wrap">
   <table>
     <thead>
-      <tr><th>ФИО</th><th>Почта</th><th>Username</th><th>Telegram ID</th><th>Баланс (ФЭБарт)</th></tr>
+      <tr><th>ФИО</th><th>Почта</th><th>Студ. билет</th><th>Username</th><th>Telegram ID</th><th>Баланс (ФЭБарт)</th></tr>
     </thead>
     <tbody>
       {% for u in users %}
       <tr>
         <td>{{ u.full_name }}</td>
         <td>{{ u.email or '—' }}</td>
+        <td>
+          <form method="post" action="/admin/users/{{ u.id }}/set-student-ticket" style="display:flex;flex-wrap:wrap;align-items:center;gap:0.4rem;max-width:22rem;">
+            <input type="text" name="student_ticket" value="{{ u.student_ticket or '' }}" maxlength="64" autocomplete="off" placeholder="не задан" style="flex:1;min-width:7rem;padding:0.35rem 0.5rem;border-radius:8px;border:1px solid var(--border);">
+            <button type="submit" class="btn btn-secondary btn-sm">Сохранить</button>
+          </form>
+        </td>
         <td>@{{ u.username or '—' }}</td>
         <td>{{ u.telegram_id }}</td>
         <td>

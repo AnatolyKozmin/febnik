@@ -14,11 +14,16 @@ async_session_factory = async_sessionmaker(engine, expire_on_commit=False, class
 
 async def init_db() -> None:
     from febnik.db.sqlite_migrate import apply_sqlite_migrations
+    from febnik.db.models import WebAppState
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     async with engine.begin() as conn:
         await apply_sqlite_migrations(conn)
+    async with async_session_factory() as session:
+        if await session.get(WebAppState, 1) is None:
+            session.add(WebAppState(id=1, cabinet_banner_active_day=None))
+            await session.commit()
 
 
 @asynccontextmanager

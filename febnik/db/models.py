@@ -39,6 +39,8 @@ class User(Base):
     telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
     username: Mapped[str | None] = mapped_column(String(255), nullable=True)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True, index=True)
+    student_ticket: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True, index=True)
+    web_pin_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True, index=True)
     full_name: Mapped[str] = mapped_column(String(512))
     role: Mapped[UserRole] = mapped_column(SAEnum(UserRole), default=UserRole.participant)
     balance_feb: Mapped[int] = mapped_column(Integer, default=0)
@@ -130,3 +132,24 @@ class Transaction(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     user: Mapped["User"] = relationship(back_populates="transactions")
+
+
+class WebAppState(Base):
+    """Одна строка id=1: глобальные переключатели веб-части."""
+
+    __tablename__ = "web_app_state"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    cabinet_banner_active_day: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class CabinetDayBanner(Base):
+    """Картинка-плашка кабинета для дня мероприятия (1, 2 или 3)."""
+
+    __tablename__ = "cabinet_day_banners"
+
+    day: Mapped[int] = mapped_column(primary_key=True)
+    file_name: Mapped[str] = mapped_column(String(255))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

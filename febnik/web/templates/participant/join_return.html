@@ -1,10 +1,10 @@
 {% extends "participant/join_layout.html" %}
 {% block join_title %}Вход — ФЭБник{% endblock %}
 {% block join_inner %}
-  <p class="feb-muted" style="text-align:center;margin:0 0 1rem;">Введите <strong>номер студенческого билета</strong>, как при регистрации</p>
+  <p class="feb-muted" style="text-align:center;margin:0 0 1rem;">Введите <strong>6 цифр</strong> студенческого билета, как при регистрации</p>
   <form method="post" action="/join/return">
     <label class="feb-join-name-label" for="st">Номер студенческого билета</label>
-    <input id="st" class="feb-join-name-input" type="text" name="student_ticket" required maxlength="64" autocomplete="off" placeholder="Как в билете" autofocus>
+    <input id="st" class="feb-join-name-input" type="text" name="student_ticket" required maxlength="6" minlength="4" pattern="[0-9]{4}|[0-9]{6}" inputmode="numeric" autocomplete="off" placeholder="000000" autofocus>
     <p style="margin-top:1.5rem;">
       <button type="submit" class="feb-btn feb-btn-accent" style="width:100%;">Войти</button>
     </p>

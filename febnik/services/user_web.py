@@ -30,15 +30,39 @@ async def get_web_user_by_email(session: AsyncSession, email: str) -> User | Non
     return r.scalar_one_or_none()
 
 
+STUDENT_TICKET_DIGITS = 6
+
+
+def compact_student_ticket_input(raw: str) -> str:
+    """Убирает все пробельные символы (на случай вставки с пробелами)."""
+    return "".join((raw or "").split())
+
+
 def normalize_student_ticket(raw: str) -> str:
-    s = (raw or "").strip()
-    return s
+    """Ровно 6 цифр после удаления пробелов. Иначе ValueError."""
+    compact = compact_student_ticket_input(raw)
+    if not compact:
+        raise ValueError("Укажите номер студенческого билета.")
+    if len(compact) != STUDENT_TICKET_DIGITS or not compact.isdigit():
+        raise ValueError("Номер студенческого билета — ровно 6 цифр, как на пластике.")
+    return compact
+
+
+def normalize_student_ticket_optional(raw: str) -> str | None:
+    """Для админки: пусто → None, иначе те же правила, что у участника."""
+    compact = compact_student_ticket_input(raw)
+    if not compact:
+        return None
+    if len(compact) != STUDENT_TICKET_DIGITS or not compact.isdigit():
+        raise ValueError("Номер студенческого билета — ровно 6 цифр.")
+    return compact
 
 
 async def get_web_user_by_student_ticket(session: AsyncSession, raw: str) -> User | None:
-    ticket = normalize_student_ticket(raw)
-    if not ticket:
+    compact = compact_student_ticket_input(raw)
+    if len(compact) != STUDENT_TICKET_DIGITS or not compact.isdigit():
         return None
+    ticket = compact
     r = await session.execute(select(User).where(User.student_ticket == ticket))
     u = r.scalar_one_or_none()
     if u and is_web_user(u):
@@ -65,10 +89,6 @@ async def create_web_participant(session: AsyncSession, full_name: str, student_
     if not raw:
         raise ValueError("Укажите фамилию и имя.")
     ticket = normalize_student_ticket(student_ticket)
-    if not ticket:
-        raise ValueError("Укажите номер студенческого билета.")
-    if len(ticket) > 64:
-        raise ValueError("Номер студенческого билета слишком длинный.")
     dup = await session.execute(select(User.id).where(User.student_ticket == ticket))
     if dup.scalar_one_or_none() is not None:
         raise ValueError("Этот номер студенческого билета уже зарегистрирован. Если это вы — войдите через «Уже регистрировался».")

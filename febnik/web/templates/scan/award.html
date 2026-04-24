@@ -7,39 +7,15 @@
   <p class="feb-muted">Баланс: {{ user.balance_feb }} ФЭБарт</p>
 
   {% if is_admin %}
-    {% if activities %}
     <form method="post" action="/admin/award-from-qr" style="margin-top:1.25rem;">
       <input type="hidden" name="t" value="{{ token }}">
-      <label for="activity_id">Интерактив</label>
-      <select name="activity_id" id="activity_id" required>
-        {% for a in activities %}
-        <option value="{{ a.id }}" data-reward="{{ a.reward_feb }}">{{ a.name }} — по умолчанию {{ a.reward_feb }} ФЭБарт</option>
-        {% endfor %}
-      </select>
-      <label for="amount_feb" style="margin-top:1rem;">Сколько начислить, ФЭБарт</label>
-      <input type="number" name="amount_feb" id="amount_feb" min="1" max="{{ max_qr_award_feb }}" step="1"
-        value="{% if activities[0].reward_feb < 1 %}1{% else %}{{ activities[0].reward_feb }}{% endif %}"
+      <label for="amount_feb">Сколько начислить, ФЭБарт</label>
+      <input type="number" name="amount_feb" id="amount_feb" required min="1" max="{{ max_qr_award_feb }}" step="1"
+        value="1"
         inputmode="numeric">
-      <p class="feb-muted" style="margin-top:0.35rem;font-size:0.9rem;">Можно изменить число вручную; пустое поле — взять награду из выбранного интерактива. Максимум за раз: {{ max_qr_award_feb }} ФЭБарт.</p>
+      <p class="feb-muted" style="margin-top:0.35rem;font-size:0.9rem;">Максимум за одно начисление: {{ max_qr_award_feb }} ФЭБарт (лимит задаётся в настройках сервера).</p>
       <p style="margin-top:1.25rem;"><button type="submit" class="feb-btn" style="width:100%;">Начислить</button></p>
     </form>
-    <script>
-      (function () {
-        var sel = document.getElementById("activity_id");
-        var amt = document.getElementById("amount_feb");
-        if (!sel || !amt) return;
-        sel.addEventListener("change", function () {
-          var opt = sel.options[sel.selectedIndex];
-          var r = opt.getAttribute("data-reward");
-          if (r === null || r === "") return;
-          var n = parseInt(r, 10);
-          if (!isNaN(n)) amt.value = n < 1 ? 1 : n;
-        });
-      })();
-    </script>
-    {% else %}
-    <p class="feb-muted">В базе нет интерактивов. Добавьте их в админке: <a href="/admin/activities">/admin/activities</a>.</p>
-    {% endif %}
     <p style="margin-top:1rem;"><a href="/admin/">Админка</a></p>
   {% else %}
     <div class="feb-flash" style="margin-top:1rem;">

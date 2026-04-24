@@ -49,6 +49,27 @@ async def apply_interactive_reward(
     return tx
 
 
+async def apply_participant_scan_reward(
+    session: AsyncSession,
+    user: User,
+    amount: int,
+    note: str | None = None,
+) -> Transaction:
+    """Начисление с экрана скана QR без привязки к интерактиву (activity_id пустой)."""
+    user.balance_feb += amount
+    tx = Transaction(
+        user_id=user.id,
+        delta=amount,
+        kind=TxKind.interactive_reward,
+        balance_after=user.balance_feb,
+        activity_id=None,
+        note=note or "Начисление по QR",
+    )
+    session.add(tx)
+    await session.flush()
+    return tx
+
+
 async def apply_admin_balance_set(
     session: AsyncSession,
     user: User,

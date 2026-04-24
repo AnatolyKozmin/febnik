@@ -26,7 +26,7 @@ from febnik.db.models import (
 )
 from febnik.services.balance import (
     apply_admin_balance_set,
-    apply_interactive_reward,
+    apply_participant_scan_reward,
     approve_balance_request,
     reject_balance_request,
 )
@@ -39,7 +39,7 @@ from febnik.services.cabinet_banners import (
     resolve_banners_root,
     save_day_banner,
 )
-from febnik.services.user_web import is_web_user, normalize_student_ticket
+from febnik.services.user_web import is_web_user, normalize_student_ticket_optional
 from febnik.web.deps import DbSession, panel_base_url
 
 logger = logging.getLogger(__name__)
@@ -121,8 +121,7 @@ async def admin_award_from_qr(
     request: Request,
     session: DbSession,
     t: str = Form(...),
-    activity_id: int = Form(...),
-    amount_feb: str = Form(""),
+    amount_feb: str = Form(...),
 ) -> RedirectResponse:
     if not request.session.get("admin"):
         return RedirectResponse(url="/admin/login", status_code=302)
@@ -135,20 +134,13 @@ async def admin_award_from_qr(
     if not user or not is_web_user(user):
         request.session["flash"] = "Участник не найден или не веб-профиль."
         return RedirectResponse(url="/admin/", status_code=302)
-    act = await session.get(Activity, activity_id)
-    if not act:
-        request.session["flash"] = "Интерактив не найден."
-        return RedirectResponse(url="/admin/", status_code=302)
 
     raw = (amount_feb or "").strip()
-    if raw:
-        try:
-            award_amount = int(raw)
-        except ValueError:
-            request.session["flash"] = "Укажите целое число ФЭБарт."
-            return RedirectResponse(url="/admin/", status_code=302)
-    else:
-        award_amount = act.reward_feb
+    try:
+        award_amount = int(raw)
+    except ValueError:
+        request.session["flash"] = "Укажите целое число ФЭБарт."
+        return RedirectResponse(url="/admin/", status_code=302)
 
     if award_amount < 1:
         request.session["flash"] = "Сумма начисления должна быть не меньше 1 ФЭБарт."
@@ -157,15 +149,13 @@ async def admin_award_from_qr(
         request.session["flash"] = f"Слишком много: максимум {settings.max_qr_award_feb} ФЭБарт за одно начисление."
         return RedirectResponse(url="/admin/", status_code=302)
 
-    tx = await apply_interactive_reward(
+    tx = await apply_participant_scan_reward(
         session,
         user,
         award_amount,
-        act.id,
-        note=f"Интерактив: {act.name} (QR), заявлено {award_amount} ФЭБарт",
+        note=f"Скан QR, начислено {award_amount} ФЭБарт",
     )
     await session.flush()
-    settings = get_settings()
     try:
         await append_log_row_async(
             settings,
@@ -176,13 +166,13 @@ async def admin_award_from_qr(
             delta=tx.delta,
             balance_after=tx.balance_after,
             kind="interactive_reward",
-            note=f"{act.name} (веб QR)",
+            note="Скан QR (ручной ввод)",
         )
     except Exception:
         logger.exception("sheets log (award QR)")
 
     request.session["flash"] = (
-        f"Начислено {award_amount} ФЭБарт участнику {user.full_name} за «{act.name}». Баланс: {user.balance_feb}."
+        f"Начислено {award_amount} ФЭБарт участнику {user.full_name}. Баланс: {user.balance_feb}."
     )
     return RedirectResponse(url="/admin/", status_code=302)
 
@@ -501,13 +491,14 @@ async def admin_user_set_student_ticket(
     if not user:
         request.session["flash"] = "Участник не найден."
         return RedirectResponse(url="/admin/users", status_code=302)
-    ticket = normalize_student_ticket(student_ticket)
-    if not ticket:
+    try:
+        ticket = normalize_student_ticket_optional(student_ticket)
+    except ValueError as e:
+        request.session["flash"] = str(e)
+        return RedirectResponse(url="/admin/users", status_code=302)
+    if ticket is None:
         user.student_ticket = None
     else:
-        if len(ticket) > 64:
-            request.session["flash"] = "Номер студенческого билета слишком длинный."
-            return RedirectResponse(url="/admin/users", status_code=302)
         dup = await session.execute(
             select(User.id).where(User.student_ticket == ticket, User.id != uid)
         )

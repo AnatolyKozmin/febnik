@@ -123,27 +123,31 @@ async def join_return_post(
 ) -> RedirectResponse:
     if _participant_id(request):
         return RedirectResponse(url="/cabinet", status_code=302)
-    raw = (student_ticket or "").strip()
-    if not raw:
-        request.session["flash_join"] = "Введите номер студенческого билета."
-        return RedirectResponse(url="/join/return", status_code=302)
-    if len(raw) > 64:
-        request.session["flash_join"] = "Номер слишком длинный."
+    compact = "".join((student_ticket or "").split())
+    if not compact:
+        request.session["flash_join"] = "Введите 6 цифр номера студенческого билета."
         return RedirectResponse(url="/join/return", status_code=302)
     att = int(request.session.get(RETURN_ATTEMPTS) or 0) + 1
     request.session[RETURN_ATTEMPTS] = att
     if att > 30:
         request.session["flash_join"] = "Слишком много попыток. Подождите несколько минут или обратитесь к организаторам."
         return RedirectResponse(url="/join/return", status_code=302)
-    user = await get_web_user_by_student_ticket(session, raw)
+    user = None
+    if len(compact) == 6 and compact.isdigit():
+        user = await get_web_user_by_student_ticket(session, compact)
+    if not user and len(compact) in (4, 6) and compact.isdigit():
+        user = await get_web_user_by_pin(session, compact)
     if not user:
-        digits = raw.replace(" ", "")
-        if len(digits) in (4, 6) and digits.isdigit():
-            user = await get_web_user_by_pin(session, digits)
-    if not user:
-        request.session["flash_join"] = (
-            "Участник с таким номером билета не найден. Проверьте ввод или пройдите регистрацию, если вы здесь впервые."
-        )
+        if not compact.isdigit():
+            request.session["flash_join"] = "Номер билета — только цифры (6 штук)."
+        elif len(compact) == 6:
+            request.session["flash_join"] = (
+                "Такого номера нет среди зарегистрированных. Проверьте цифры или пройдите регистрацию."
+            )
+        else:
+            request.session["flash_join"] = (
+                "Нужны 6 цифр студенческого билета. Если у вас старый вход по коду из 4 цифр — введите только этот код."
+            )
         return RedirectResponse(url="/join/return", status_code=302)
     request.session[RETURN_ATTEMPTS] = 0
     r = RedirectResponse(url="/cabinet", status_code=302)

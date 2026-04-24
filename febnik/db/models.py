@@ -1,7 +1,18 @@
 import enum
 from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Date, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -24,6 +35,7 @@ class TxKind(str, enum.Enum):
     prize_purchase = "prize_purchase"
     admin_adjust = "admin_adjust"
     balance_request_grant = "balance_request_grant"
+    feedback_reward = "feedback_reward"
 
 
 class BalanceRequestStatus(str, enum.Enum):
@@ -49,6 +61,7 @@ class User(Base):
     transactions: Mapped[list["Transaction"]] = relationship(back_populates="user")
     claims: Mapped[list["Claim"]] = relationship(back_populates="user")
     balance_requests: Mapped[list["BalanceRequest"]] = relationship(back_populates="user")
+    feedback_responses: Mapped[list["FeedbackResponse"]] = relationship(back_populates="user")
 
 
 class Activity(Base):
@@ -114,6 +127,18 @@ class Claim(Base):
     prize: Mapped["Prize"] = relationship(back_populates="claims")
 
 
+class ScanAwardIdempotency(Base):
+    """Ключ идемпотентности для начисления по QR (повтор запроса при обрыве сети)."""
+
+    __tablename__ = "scan_award_idempotency"
+
+    idempotency_key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    amount_feb: Mapped[int] = mapped_column(Integer)
+    transaction_id: Mapped[int] = mapped_column(ForeignKey("transactions.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class Transaction(Base):
     __tablename__ = "transactions"
 
@@ -153,3 +178,30 @@ class CabinetDayBanner(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class FeedbackSurveySlot(Base):
+    """Настройки анкеты ОС по дням (1–3): приём ответов и награда в ФЭБарт."""
+
+    __tablename__ = "feedback_survey_slots"
+
+    day: Mapped[int] = mapped_column(primary_key=True)
+    is_open: Mapped[bool] = mapped_column(Boolean, default=False)
+    reward_feb: Mapped[int] = mapped_column(Integer, default=0)
+    title: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
+
+class FeedbackResponse(Base):
+    """Ответы участника на анкету за конкретный день (один раз на день)."""
+
+    __tablename__ = "feedback_responses"
+
+    __table_args__ = (UniqueConstraint("user_id", "day", name="uq_feedback_user_day"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    day: Mapped[int] = mapped_column(Integer, index=True)
+    answers_json: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    user: Mapped["User"] = relationship(back_populates="feedback_responses")

@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Анкеты ОС — админка{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="toolbar">
+    <h1 style="margin:0; flex:1;">Обратная связь (3 дня)</h1>
+    <a href="/admin/" class="btn btn-secondary btn-sm">Назад</a>
+  </div>
+  <p class="muted" style="margin:0 0 1rem 0;">
+    Для каждого дня: откройте или закройте приём ответов и задайте награду в ФЭБарт (0 — без начисления, максимум как у QR: {{ max_qr_award_feb }}).
+    Участник заполняет анкету с оценками и текстовыми ответами; смотрите ответы во вкладках ниже.
+  </p>
+
+  <h2 style="margin:0 0 0.75rem 0; font-size:1.1rem;">Настройки по дням</h2>
+  {% for d in [1, 2, 3] %}
+  {% set s = slots[d] %}
+  <div style="border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem;background:var(--card-bg, #fff);">
+    <h3 style="margin:0 0 0.75rem 0;font-size:1rem;">День {{ d }}</h3>
+    <form method="post" action="/admin/feedback/slot" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(10rem,1fr));gap:0.75rem;align-items:end;">
+      <input type="hidden" name="day" value="{{ d }}">
+      <div>
+        <label class="muted" style="font-size:0.85rem;display:block;margin-bottom:0.25rem;">Приём ответов</label>
+        <select name="is_open" style="width:100%;padding:0.5rem 0.6rem;border-radius:8px;border:1px solid var(--border);">
+          <option value="1" {% if s.is_open %}selected{% endif %}>Открыта</option>
+          <option value="0" {% if not s.is_open %}selected{% endif %}>Закрыта</option>
+        </select>
+      </div>
+      <div>
+        <label class="muted" style="font-size:0.85rem;display:block;margin-bottom:0.25rem;">ФЭБарт за анкету</label>
+        <input type="number" name="reward_feb" value="{{ s.reward_feb }}" min="0" max="{{ max_qr_award_feb }}" step="1" required style="width:100%;padding:0.5rem 0.6rem;border-radius:8px;border:1px solid var(--border);">
+      </div>
+      <div style="grid-column:1/-1;">
+        <label class="muted" style="font-size:0.85rem;display:block;margin-bottom:0.25rem;">Подпись в кабинете (необязательно)</label>
+        <input type="text" name="title" value="{{ s.title or '' }}" maxlength="512" placeholder="Короткий текст для участника" style="width:100%;padding:0.5rem 0.6rem;border-radius:8px;border:1px solid var(--border);">
+      </div>
+      <div>
+        <button type="submit" class="btn btn-secondary btn-sm">Сохранить день {{ d }}</button>
+      </div>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="card" style="margin-top:1rem;">
+  <h2 style="margin:0 0 0.75rem 0; font-size:1.1rem;">Ответы участников</h2>
+  <div style="display:flex;flex-wrap:wrap;gap:0.35rem;margin-bottom:1rem;border-bottom:1px solid var(--border);padding-bottom:0.5rem;">
+    {% for d in [1, 2, 3] %}
+    <a href="/admin/feedback?day={{ d }}" class="btn {% if active_tab == d %}btn-sm{% else %}btn-secondary btn-sm{% endif %}" style="text-decoration:none;">День {{ d }}</a>
+    {% endfor %}
+  </div>
+  {% if not response_items %}
+  <p class="muted">Пока нет ответов за день {{ active_tab }}.</p>
+  {% else %}
+  <div style="display:flex;flex-direction:column;gap:1rem;">
+    {% for item in response_items %}
+    {% set row = item.row %}
+    <div style="border:1px solid var(--border);border-radius:12px;padding:1rem;background:var(--card-bg, #fff);">
+      <p style="margin:0 0 0.75rem 0;font-size:0.9rem;color:var(--muted, #666);">
+        <strong>{{ row.user.full_name if row.user else '—' }}</strong>
+        · {{ row.created_at.strftime('%Y-%m-%d %H:%M') if row.created_at else '—' }} UTC
+      </p>
+      <dl style="margin:0;display:grid;gap:0.65rem;">
+        {% for label, val in item.pairs %}
+        <div>
+          <dt style="font-size:0.82rem;font-weight:600;color:var(--muted, #666);margin:0 0 0.2rem 0;">{{ label }}</dt>
+          <dd style="margin:0;white-space:pre-wrap;word-break:break-word;font-size:0.95rem;">{{ val }}</dd>
+        </div>
+        {% endfor %}
+      </dl>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

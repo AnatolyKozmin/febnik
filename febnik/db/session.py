@@ -20,9 +20,18 @@ async def init_db() -> None:
         await conn.run_sync(Base.metadata.create_all)
     async with engine.begin() as conn:
         await apply_sqlite_migrations(conn)
+    from febnik.db.models import FeedbackSurveySlot
+
     async with async_session_factory() as session:
+        changed = False
         if await session.get(WebAppState, 1) is None:
             session.add(WebAppState(id=1, cabinet_banner_active_day=None))
+            changed = True
+        for d in (1, 2, 3):
+            if await session.get(FeedbackSurveySlot, d) is None:
+                session.add(FeedbackSurveySlot(day=d, is_open=False, reward_feb=0, title=None))
+                changed = True
+        if changed:
             await session.commit()
 
 

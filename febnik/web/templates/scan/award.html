@@ -93,6 +93,20 @@
     font-size: 0.9rem;
     font-weight: 600;
   }
+  #award-network-status {
+    display: none;
+    margin-top: 0.75rem;
+    font-size: 0.92rem;
+    line-height: 1.35;
+  }
+  #award-network-status.is-visible { display: block; }
+  #award-network-status.is-warn {
+    color: var(--feb-bordeaux);
+    background: rgba(105, 9, 11, 0.08);
+    border-radius: 12px;
+    padding: 0.65rem 0.75rem;
+    border: 1px solid rgba(105, 9, 11, 0.2);
+  }
   #award {
     scroll-margin-top: 0.5rem;
   }
@@ -109,18 +123,21 @@
   <p class="feb-award-who">{{ user.full_name }}</p>
   <p class="feb-award-balance">Баланс сейчас: <strong>{{ user.balance_feb }}</strong> ФЭБарт</p>
 
+  <div id="award-network-status" class="feb-flash is-warn" role="status"></div>
+
   <form id="award" method="post" action="/admin/award-from-qr" class="feb-award-form">
     <input type="hidden" name="t" value="{{ token }}">
+    <input type="hidden" name="idempotency_key" id="award_idempotency_key" value="">
     <label for="amount_feb">ФЭБарт начислить</label>
     <input type="number" name="amount_feb" id="amount_feb" required min="1" max="{{ max_qr_award_feb }}" step="1"
       value="1"
       inputmode="numeric" autocomplete="off">
-    <p class="feb-award-hint">Максимум за раз: {{ max_qr_award_feb }}. Сумма запоминается на этом устройстве до закрытия вкладки.</p>
+    <p class="feb-award-hint">Максимум за раз: {{ max_qr_award_feb }}. Сумма запоминается на этом устройстве до закрытия вкладки. При нестабильной сети отправка повторится сама; повтор не дублирует баллы.</p>
   </form>
 
   <div class="feb-award-sticky">
     <div class="feb-main-inner">
-      <button type="submit" class="feb-btn feb-btn-accent" form="award">Начислить</button>
+      <button type="submit" class="feb-btn feb-btn-accent" form="award" id="award-submit-btn">Начислить</button>
       <a class="feb-award-skip" href="/admin/scan">Без начисления — к сканеру</a>
     </div>
   </div>
@@ -128,30 +145,122 @@
   (function () {
     var form = document.getElementById("award");
     var input = document.getElementById("amount_feb");
-    var key = "febnik_last_qr_amount";
+    var btn = document.getElementById("award-submit-btn");
+    var statusEl = document.getElementById("award-network-status");
+    var idemInput = document.getElementById("award_idempotency_key");
+    var token = {{ token | tojson }};
+    var amountKey = "febnik_last_qr_amount";
+    var idemStorageKey = "febnik_award_idem_" + token.slice(0, 96);
+
+    function showNetStatus(msg, isError) {
+      if (!statusEl) return;
+      statusEl.textContent = msg || "";
+      statusEl.className = "feb-flash is-warn" + (msg ? " is-visible" : "");
+    }
+
+    function ensureIdempotencyKey() {
+      var v = (idemInput && idemInput.value && idemInput.value.trim()) || sessionStorage.getItem(idemStorageKey);
+      if (!v) {
+        if (window.crypto && crypto.randomUUID) v = crypto.randomUUID();
+        else v = "k" + Date.now().toString(36) + Math.random().toString(36).slice(2, 14);
+      }
+      if (idemInput) idemInput.value = v;
+      try { sessionStorage.setItem(idemStorageKey, v); } catch (e) {}
+      return v;
+    }
+
+    function clearIdempotencyKey() {
+      if (idemInput) idemInput.value = "";
+      try { sessionStorage.removeItem(idemStorageKey); } catch (e) {}
+    }
+
+    function sleep(ms) {
+      return new Promise(function (resolve) { setTimeout(resolve, ms); });
+    }
+
+    async function postAwardWithRetry(payload) {
+      var lastMsg = "";
+      for (var attempt = 0; attempt < 4; attempt++) {
+        try {
+          var res = await fetch("/admin/api/award-from-qr", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify(payload),
+          });
+          var data = {};
+          try { data = await res.json(); } catch (e) {}
+          if (res.status === 401) {
+            window.location.href = "/admin/login?next=" + encodeURIComponent(window.location.pathname + window.location.search);
+            return null;
+          }
+          if (res.ok && data.ok) return data;
+          lastMsg = (data && data.message) || res.statusText || "Ошибка сервера";
+          var retryable = res.status === 408 || res.status === 429 || res.status >= 500 || !res.status;
+          if (!retryable && res.status >= 400 && res.status < 500) throw new Error(lastMsg);
+        } catch (e) {
+          lastMsg = (e && e.message) ? e.message : "Нет соединения с сервером";
+        }
+        if (attempt < 3) await sleep(700 * Math.pow(2, attempt));
+      }
+      throw new Error(lastMsg || "Не удалось отправить. Проверьте интернет и нажмите ещё раз.");
+    }
+
     if (input) {
-      var saved = sessionStorage.getItem(key);
+      var saved = sessionStorage.getItem(amountKey);
       if (saved && /^[1-9][0-9]*$/.test(saved)) {
         var n = parseInt(saved, 10);
         var mx = parseInt(input.getAttribute("max") || "999999", 10);
         if (n >= 1 && n <= mx) input.value = String(n);
       }
-      input.addEventListener("change", function () { sessionStorage.setItem(key, input.value); });
-      if (form) {
-        form.addEventListener("submit", function () { sessionStorage.setItem(key, input.value); });
-      }
-      setTimeout(function () {
-        try {
-          input.focus({ preventScroll: true });
-        } catch (e) {
-          input.focus();
-        }
-        var el = document.getElementById("award");
-        if (el && (location.hash === "#award" || window.matchMedia("(max-width: 640px)").matches)) {
-          el.scrollIntoView({ block: "center", behavior: "auto" });
-        }
-      }, 80);
+      input.addEventListener("change", function () { sessionStorage.setItem(amountKey, input.value); });
     }
+
+    if (form) {
+      form.addEventListener("submit", function (e) {
+        sessionStorage.setItem(amountKey, input ? input.value : "");
+        if (!window.fetch) {
+          ensureIdempotencyKey();
+          return;
+        }
+        if (typeof form.checkValidity === "function" && !form.checkValidity()) {
+          if (typeof form.reportValidity === "function") form.reportValidity();
+          return;
+        }
+        e.preventDefault();
+        showNetStatus("");
+        var amt = input ? parseInt(input.value, 10) : 0;
+        var mx = input ? parseInt(input.getAttribute("max") || "999999", 10) : 0;
+        if (!amt || amt < 1 || amt > mx) return;
+        var idem = ensureIdempotencyKey();
+        var payload = { t: token, amount_feb: amt, idempotency_key: idem };
+        var label = btn && btn.textContent;
+        if (btn) { btn.disabled = true; btn.textContent = "Отправка…"; }
+        postAwardWithRetry(payload)
+          .then(function (data) {
+            if (!data) return;
+            clearIdempotencyKey();
+            window.location.href = "/admin/scan";
+          })
+          .catch(function (err) {
+            showNetStatus(err.message || "Ошибка", true);
+            if (btn) { btn.disabled = false; btn.textContent = label || "Начислить"; }
+          });
+      });
+    }
+
+    setTimeout(function () {
+      if (!input) return;
+      try {
+        input.focus({ preventScroll: true });
+      } catch (e) {
+        input.focus();
+      }
+      var el = document.getElementById("award");
+      if (el && (location.hash === "#award" || window.matchMedia("(max-width: 640px)").matches)) {
+        el.scrollIntoView({ block: "center", behavior: "auto" });
+      }
+    }, 80);
   })();
   </script>
   {% else %}

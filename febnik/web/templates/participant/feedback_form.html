@@ -1,0 +1,207 @@
+{% extends "participant/base.html" %}
+{% block title %}Анкета день {{ day }} — ФЭБник{% endblock %}
+{% block content %}
+<style>
+  .feb-survey-stack { display: flex; flex-direction: column; gap: 1.35rem; }
+  .feb-survey-q label {
+    display: block;
+    font-weight: 600;
+    font-size: 0.98rem;
+    line-height: 1.35;
+    margin-bottom: 0.65rem;
+    color: var(--feb-text);
+  }
+  .feb-survey-q--optional label::after {
+    content: " (необязательно)";
+    font-weight: 500;
+    color: var(--feb-muted);
+    font-size: 0.9em;
+  }
+  .feb-hearts {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.35rem 0.2rem;
+    max-width: 100%;
+  }
+  .feb-heart-btn {
+    flex: 1 1 calc(10% - 0.2rem);
+    min-width: 2.35rem;
+    max-width: 3.1rem;
+    padding: 0.4rem 0.15rem 0.35rem;
+    margin: 0;
+    border: none;
+    border-radius: 12px;
+    background: rgba(215, 135, 164, 0.12);
+    color: var(--feb-muted);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15rem;
+    transition: background 0.15s, color 0.15s, transform 0.1s;
+  }
+  .feb-heart-btn:active { transform: scale(0.96); }
+  .feb-heart-btn .feb-heart-glyph {
+    font-size: 1.35rem;
+    line-height: 1;
+    opacity: 0.45;
+    transition: opacity 0.15s, transform 0.15s;
+  }
+  .feb-heart-btn .feb-heart-num {
+    font-size: 0.72rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+  .feb-heart-btn.is-on {
+    background: linear-gradient(145deg, rgba(215, 135, 164, 0.45), rgba(105, 9, 11, 0.18));
+    color: var(--feb-bordeaux);
+  }
+  .feb-heart-btn.is-on .feb-heart-glyph {
+    opacity: 1;
+    color: var(--feb-bordeaux);
+    transform: scale(1.08);
+  }
+  .feb-heart-btn.is-dim .feb-heart-glyph {
+    opacity: 0.85;
+    color: var(--feb-accent);
+  }
+  @media (max-width: 380px) {
+    .feb-heart-btn { min-width: 2rem; max-width: none; flex: 1 1 calc(20% - 0.25rem); }
+    .feb-heart-btn .feb-heart-glyph { font-size: 1.2rem; }
+  }
+  .feb-survey-text {
+    width: 100%;
+    min-height: 5.5rem;
+    padding: 0.75rem 0.85rem;
+    border-radius: 12px;
+    border: 1px solid var(--feb-border);
+    font: inherit;
+    resize: vertical;
+    background: var(--feb-surface-warm);
+  }
+  .feb-survey-text:focus {
+    outline: 2px solid rgba(215, 135, 164, 0.55);
+    outline-offset: 1px;
+    border-color: rgba(215, 135, 164, 0.4);
+  }
+  .feb-survey-closing {
+    margin-top: 1.5rem;
+    padding: 1rem 1rem;
+    border-radius: 14px;
+    background: linear-gradient(135deg, rgba(254, 240, 219, 0.85), rgba(250, 251, 211, 0.5));
+    border: 1px solid var(--feb-border);
+    font-size: 0.98rem;
+    line-height: 1.45;
+    color: var(--feb-text);
+  }
+</style>
+<div class="feb-card">
+  <p style="margin:0 0 0.75rem 0;"><a href="/cabinet/feedback">← К списку анкет</a></p>
+  <h1 style="font-size:1.2rem;margin-bottom:0.35rem;">День {{ day }}</h1>
+  {% if slot.title %}
+  <p class="feb-muted" style="margin:0 0 1rem 0;">{{ slot.title }}</p>
+  {% endif %}
+  {% if flash_cabinet %}
+  <div class="feb-flash" style="margin-bottom:1rem;">{{ flash_cabinet }}</div>
+  {% endif %}
+  {% if slot.reward_feb > 0 %}
+  <p class="feb-muted" style="margin:0 0 1rem 0;font-size:0.92rem;">После отправки начислим <strong>{{ slot.reward_feb }}</strong> ФЭБарт (если анкета ещё открыта).</p>
+  {% endif %}
+  {% if feedback_fields is not defined or feedback_closing is not defined %}
+  <div class="feb-flash">Не удалось загрузить анкету (устарела версия страницы). Обновите кэш или откройте <a href="/cabinet/feedback">список анкет</a> снова.</div>
+  {% else %}
+  <form id="feb-feedback-form" method="post" action="/cabinet/feedback/{{ day }}">
+    <input type="hidden" name="answers_json" id="feb-answers-json" value="">
+    <div class="feb-survey-stack">
+      {% for field in feedback_fields %}
+      {% if field.kind == 'rating' %}
+      <div class="feb-survey-q feb-rate-block" data-field-id="{{ field.id }}">
+        <label id="label-{{ field.id }}">{{ field.label }}</label>
+        <div class="feb-hearts" role="radiogroup" aria-labelledby="label-{{ field.id }}">
+          {% for i in range(1, 11) %}
+          <button type="button" class="feb-heart-btn" data-value="{{ i }}" aria-label="Оценка {{ i }} из 10" aria-pressed="false">
+            <span class="feb-heart-glyph" aria-hidden="true">♥</span>
+            <span class="feb-heart-num">{{ i }}</span>
+          </button>
+          {% endfor %}
+        </div>
+      </div>
+      {% else %}
+      <div class="feb-survey-q{% if not field.required %} feb-survey-q--optional{% endif %}">
+        <label for="field-{{ field.id }}">{{ field.label }}</label>
+        <textarea
+          id="field-{{ field.id }}"
+          class="feb-survey-text"
+          data-field-id="{{ field.id }}"
+          {% if field.required %}required{% endif %}
+          maxlength="8000"
+          rows="4"
+          placeholder="{{ field.placeholder or 'Твой ответ' }}"
+        ></textarea>
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+    <p style="margin-top:1.25rem;"><button type="submit" class="feb-btn feb-btn-accent" style="width:100%;">Отправить</button></p>
+  </form>
+  <div class="feb-survey-closing" role="note">{{ feedback_closing }}</div>
+  {% endif %}
+</div>
+<script>
+(function () {
+  var form = document.getElementById("feb-feedback-form");
+  if (!form) return;
+  form.querySelectorAll(".feb-rate-block").forEach(function (block) {
+    var buttons = block.querySelectorAll(".feb-heart-btn");
+    var selected = null;
+    function paint() {
+      buttons.forEach(function (btn) {
+        var v = parseInt(btn.getAttribute("data-value"), 10);
+        btn.classList.remove("is-on", "is-dim");
+        btn.setAttribute("aria-pressed", "false");
+        if (selected == null) return;
+        if (v === selected) {
+          btn.classList.add("is-on");
+          btn.setAttribute("aria-pressed", "true");
+        } else if (v < selected) {
+          btn.classList.add("is-dim");
+        }
+      });
+    }
+    buttons.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        selected = parseInt(btn.getAttribute("data-value"), 10);
+        paint();
+      });
+    });
+  });
+  form.addEventListener("submit", function (e) {
+    var answers = {};
+    var missing = false;
+    form.querySelectorAll(".feb-rate-block").forEach(function (block) {
+      var id = block.getAttribute("data-field-id");
+      var on = block.querySelector(".feb-heart-btn.is-on");
+      if (!on) {
+        missing = true;
+        return;
+      }
+      answers[id] = parseInt(on.getAttribute("data-value"), 10);
+    });
+    if (missing) {
+      e.preventDefault();
+      alert("Пожалуйста, поставь оценку во всех вопросах со шкалой от 1 до 10.");
+      return;
+    }
+    form.querySelectorAll("textarea.feb-survey-text").forEach(function (ta) {
+      var id = ta.getAttribute("data-field-id");
+      if (id) answers[id] = ta.value;
+    });
+    document.getElementById("feb-answers-json").value = JSON.stringify(answers);
+  });
+})();
+</script>
+{% endblock %}

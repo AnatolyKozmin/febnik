@@ -1,4 +1,5 @@
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from febnik.db.models import (
@@ -7,6 +8,7 @@ from febnik.db.models import (
     Claim,
     ClaimStatus,
     Prize,
+    ScanAwardIdempotency,
     Transaction,
     TxKind,
     User,
@@ -54,6 +56,8 @@ async def apply_participant_scan_reward(
     user: User,
     amount: int,
     note: str | None = None,
+    *,
+    _flush: bool = True,
 ) -> Transaction:
     """Начисление с экрана скана QR без привязки к интерактиву (activity_id пустой)."""
     user.balance_feb += amount
@@ -64,6 +68,97 @@ async def apply_participant_scan_reward(
         balance_after=user.balance_feb,
         activity_id=None,
         note=note or "Начисление по QR",
+    )
+    session.add(tx)
+    if _flush:
+        await session.flush()
+    return tx
+
+
+def _normalize_idempotency_key(raw: str | None) -> str | None:
+    if not raw:
+        return None
+    key = raw.strip()
+    if not key or len(key) > 64:
+        return None
+    if not all(c.isalnum() or c in "-_" for c in key):
+        return None
+    return key
+
+
+async def apply_participant_scan_reward_idempotent(
+    session: AsyncSession,
+    user: User,
+    amount: int,
+    note: str | None = None,
+    *,
+    idempotency_key: str | None = None,
+) -> tuple[Transaction, bool]:
+    """Начисление по QR с защитой от повторной отправки. Возвращает (транзакция, is_replay)."""
+    key = _normalize_idempotency_key(idempotency_key)
+    if not key:
+        tx = await apply_participant_scan_reward(session, user, amount, note=note)
+        return tx, False
+
+    existing = await session.scalar(
+        select(ScanAwardIdempotency).where(ScanAwardIdempotency.idempotency_key == key)
+    )
+    if existing is not None:
+        if existing.user_id != user.id or existing.amount_feb != amount:
+            raise ValueError(
+                "Ключ запроса уже использован для другого начисления. Сгенерируйте новый QR или обновите страницу."
+            )
+        tx = await session.get(Transaction, existing.transaction_id)
+        if tx is None:
+            raise ValueError("Запись о начислении не найдена. Обратитесь к администратору.")
+        await session.refresh(user)
+        return tx, True
+
+    try:
+        async with session.begin_nested():
+            tx = await apply_participant_scan_reward(session, user, amount, note=note, _flush=False)
+            await session.flush()
+            session.add(
+                ScanAwardIdempotency(
+                    idempotency_key=key,
+                    user_id=user.id,
+                    amount_feb=amount,
+                    transaction_id=tx.id,
+                )
+            )
+            await session.flush()
+    except IntegrityError:
+        existing2 = await session.scalar(
+            select(ScanAwardIdempotency).where(ScanAwardIdempotency.idempotency_key == key)
+        )
+        if existing2 and existing2.user_id == user.id and existing2.amount_feb == amount:
+            tx2 = await session.get(Transaction, existing2.transaction_id)
+            if tx2 is None:
+                raise ValueError("Коллизия при сохранении. Попробуйте ещё раз.") from None
+            await session.refresh(user)
+            return tx2, True
+        raise ValueError("Не удалось сохранить начисление. Попробуйте ещё раз.") from None
+
+    return tx, False
+
+
+async def apply_feedback_survey_reward(
+    session: AsyncSession,
+    user: User,
+    amount: int,
+    day: int,
+    note: str | None = None,
+) -> Transaction:
+    if amount < 1:
+        raise ValueError("Сумма награды за анкету должна быть не меньше 1 ФЭБарт.")
+    user.balance_feb += amount
+    tx = Transaction(
+        user_id=user.id,
+        delta=amount,
+        kind=TxKind.feedback_reward,
+        balance_after=user.balance_feb,
+        activity_id=None,
+        note=note or f"Анкета ОС, день {day}",
     )
     session.add(tx)
     await session.flush()

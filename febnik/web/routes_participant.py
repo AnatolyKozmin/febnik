@@ -1,12 +1,14 @@
 """Участник: регистрация по ФИО и студбилету; повторный вход по студбилету; кабинет, QR."""
 
 import io
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 
 import qrcode
 from fastapi import APIRouter, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from sqlalchemy.exc import IntegrityError
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from febnik.config import get_settings
@@ -15,6 +17,12 @@ from febnik.db.models import BalanceRequest, BalanceRequestStatus, Prize, User
 from febnik.services.balance import create_prize_claim, has_pending_balance_request
 from febnik.services.qr_token import make_participant_scan_token
 from febnik.services.sheets import append_log_row_async
+from febnik.services.feedback_survey import (
+    load_all_slots,
+    submit_feedback,
+    user_has_response,
+)
+from febnik.survey_content import get_survey_day
 from febnik.services.user_web import (
     create_web_participant,
     get_web_user_by_pin,
@@ -166,7 +174,18 @@ async def cabinet(request: Request, session: DbSession) -> Response:
     return templates.TemplateResponse(
         "participant/cabinet.html",
         _ctx(request, user=user, flash_cabinet=flash, cabinet_banner_url=banner),
+        headers={"Cache-Control": "private, no-store, max-age=0, must-revalidate"},
     )
+
+
+@router.get("/cabinet/balance.json")
+async def cabinet_balance_json(request: Request, session: DbSession) -> JSONResponse:
+    """Лёгкий JSON для обновления баланса без полной перезагрузки (после скана при плохой сети)."""
+    user = await _load_participant(session, request)
+    if not user or not is_web_user(user):
+        return JSONResponse({"ok": False}, status_code=401)
+    await session.refresh(user)
+    return JSONResponse({"ok": True, "balance_feb": user.balance_feb})
 
 
 @router.get("/cabinet/prizes", response_class=HTMLResponse)
@@ -284,6 +303,109 @@ async def cabinet_qr_png(request: Request, session: DbSession) -> Response:
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return Response(content=buf.getvalue(), media_type="image/png")
+
+
+@router.get("/cabinet/feedback", response_class=HTMLResponse)
+async def cabinet_feedback_landing(request: Request, session: DbSession) -> Response:
+    user = await _load_participant(session, request)
+    if not user or not is_web_user(user):
+        return _redirect_cabinet_guest(request)
+    slots = await load_all_slots(session)
+    done = {d: await user_has_response(session, user.id, d) for d in (1, 2, 3)}
+    flash = request.session.pop("flash_cabinet", None)
+    return templates.TemplateResponse(
+        "participant/feedback_landing.html",
+        _ctx(request, user=user, slots=slots, done=done, flash_cabinet=flash),
+    )
+
+
+@router.get("/cabinet/feedback/{day}", response_class=HTMLResponse)
+async def cabinet_feedback_form(request: Request, session: DbSession, day: int) -> Response:
+    if day not in (1, 2, 3):
+        return RedirectResponse(url="/cabinet/feedback", status_code=302)
+    user = await _load_participant(session, request)
+    if not user or not is_web_user(user):
+        return _redirect_cabinet_guest(request)
+    survey = get_survey_day(day)
+    if not survey:
+        request.session["flash_cabinet"] = "Анкета для этого дня не настроена."
+        return RedirectResponse(url="/cabinet/feedback", status_code=302)
+    slots = await load_all_slots(session)
+    slot = slots[day]
+    if not slot.is_open:
+        request.session["flash_cabinet"] = f"Анкета «День {day}» сейчас закрыта."
+        return RedirectResponse(url="/cabinet/feedback", status_code=302)
+    if await user_has_response(session, user.id, day):
+        request.session["flash_cabinet"] = "Вы уже отправили ответы за этот день."
+        return RedirectResponse(url="/cabinet/feedback", status_code=302)
+    flash = request.session.pop("flash_cabinet", None)
+    # Явно передаём поля и финальный текст — шаблон не зависит от одного имени `survey`
+    # (избегает UndefinedError при частичном деплое старого роутера + нового шаблона).
+    return templates.TemplateResponse(
+        "participant/feedback_form.html",
+        _ctx(
+            request,
+            user=user,
+            day=day,
+            slot=slot,
+            feedback_fields=survey.fields,
+            feedback_closing=survey.closing_message,
+            flash_cabinet=flash,
+        ),
+    )
+
+
+@router.post("/cabinet/feedback/{day}")
+async def cabinet_feedback_post(
+    request: Request,
+    session: DbSession,
+    day: int,
+    answers_json: str = Form(...),
+) -> RedirectResponse:
+    if day not in (1, 2, 3):
+        return RedirectResponse(url="/cabinet/feedback", status_code=302)
+    user = await _load_participant(session, request)
+    if not user or not is_web_user(user):
+        return _redirect_cabinet_guest(request)
+    try:
+        raw = json.loads(answers_json or "{}")
+    except json.JSONDecodeError:
+        request.session["flash_cabinet"] = "Не удалось прочитать ответы. Обновите страницу и попробуйте снова."
+        return RedirectResponse(url=f"/cabinet/feedback/{day}", status_code=302)
+    if not isinstance(raw, dict):
+        request.session["flash_cabinet"] = "Некорректный формат ответов."
+        return RedirectResponse(url=f"/cabinet/feedback/{day}", status_code=302)
+    try:
+        _, granted = await submit_feedback(session, user, day, raw)
+        await session.flush()
+    except IntegrityError:
+        await session.rollback()
+        request.session["flash_cabinet"] = "Этот ответ уже был сохранён ранее."
+        return RedirectResponse(url="/cabinet/feedback", status_code=302)
+    except ValueError as e:
+        request.session["flash_cabinet"] = str(e)
+        return RedirectResponse(url=f"/cabinet/feedback/{day}", status_code=302)
+    if granted:
+        settings = get_settings()
+        try:
+            await append_log_row_async(
+                settings,
+                when=datetime.now(timezone.utc),
+                telegram_id=user.telegram_id,
+                username=user.username,
+                full_name=user.full_name,
+                delta=granted,
+                balance_after=user.balance_feb,
+                kind="feedback_reward",
+                note=f"Анкета ОС день {day}",
+            )
+        except Exception:
+            pass
+    msg = "Спасибо! Анкета отправлена."
+    if granted:
+        msg += f" Начислено {granted} ФЭБарт."
+    request.session["flash_cabinet"] = msg
+    return RedirectResponse(url="/cabinet/feedback", status_code=302)
 
 
 @router.get("/cabinet/qr", response_class=HTMLResponse)

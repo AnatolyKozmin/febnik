@@ -26,7 +26,11 @@
     <p class="feb-muted" style="margin: 0 0 0.35rem; font-size: 0.9rem;">Почта в профиле: {{ user.email }}</p>
     {% endif %}
     <p class="feb-muted" style="margin: 0 0 0.35rem;">Баланс</p>
-    <div class="feb-balance">{{ user.balance_feb }} <span style="font-size:1rem;font-weight:600;color:var(--feb-muted);">ФЭБарт</span></div>
+    <div class="feb-balance"><span id="feb-balance-val">{{ user.balance_feb }}</span> <span style="font-size:1rem;font-weight:600;color:var(--feb-muted);">ФЭБарт</span></div>
+    <p class="feb-muted" style="margin:0.5rem 0 0;font-size:0.86rem;line-height:1.4;">
+      Если после сканирования цифра не изменилась, подождите или
+      <button type="button" id="feb-refresh-balance" style="background:none;border:none;color:var(--feb-bordeaux);font:inherit;font-weight:700;padding:0;cursor:pointer;text-decoration:underline;">обновите баланс</button>.
+    </p>
   </div>
   {% if flash_cabinet %}
   <div class="feb-flash" style="margin-top: 0.75rem;">{{ flash_cabinet }}</div>
@@ -43,6 +47,10 @@
   </nav>
 
   <div class="feb-links feb-cabinet-secondary">
+    <a class="feb-tile" href="/cabinet/feedback">
+      Обратная связь
+      <span>Три анкеты по дням; за прохождение можно получить ФЭБарт</span>
+    </a>
     <a class="feb-tile" href="/cabinet/qr">
       Мой QR-код
       <span>Покажите организатору для начисления баллов</span>
@@ -50,4 +58,23 @@
   </div>
 
 </div>
+<script>
+(function () {
+  var el = document.getElementById("feb-balance-val");
+  function pull() {
+    if (!el) return;
+    fetch("/cabinet/balance.json", { credentials: "same-origin" })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d && d.ok && typeof d.balance_feb === "number") el.textContent = String(d.balance_feb);
+      })
+      .catch(function () {});
+  }
+  var b = document.getElementById("feb-refresh-balance");
+  if (b) b.addEventListener("click", pull);
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible") pull();
+  });
+})();
+</script>
 {% endblock %}

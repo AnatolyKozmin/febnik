@@ -7,7 +7,8 @@ from typing import Annotated
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, File, Form, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from pydantic import BaseModel, Field
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
@@ -20,17 +21,17 @@ from febnik.db.models import (
     CabinetDayBanner,
     Claim,
     ClaimStatus,
+    FeedbackSurveySlot,
     Prize,
     Transaction,
     User,
 )
 from febnik.services.balance import (
     apply_admin_balance_set,
-    apply_participant_scan_reward,
     approve_balance_request,
     reject_balance_request,
 )
-from febnik.services.qr_token import parse_participant_scan_token
+from febnik.services.qr_award import QrAwardOk, admin_try_award_from_qr
 from febnik.services.sheets import append_log_row_async
 from febnik.services.telegram_notify import send_user_message
 from febnik.services.cabinet_banners import (
@@ -39,7 +40,13 @@ from febnik.services.cabinet_banners import (
     resolve_banners_root,
     save_day_banner,
 )
-from febnik.services.user_web import is_web_user, normalize_student_ticket_optional
+from febnik.services.feedback_survey import (
+    ensure_feedback_slots,
+    list_responses_for_day,
+    load_all_slots,
+)
+from febnik.survey_content import format_answers_for_admin
+from febnik.services.user_web import normalize_student_ticket_optional
 from febnik.web.deps import DbSession, panel_base_url
 
 logger = logging.getLogger(__name__)
@@ -116,53 +123,24 @@ async def admin_logout(request: Request) -> RedirectResponse:
     return RedirectResponse(url="/admin/login", status_code=302)
 
 
-@router.post("/admin/award-from-qr")
-async def admin_award_from_qr(
-    request: Request,
-    session: DbSession,
-    t: str = Form(...),
-    amount_feb: str = Form(...),
-) -> RedirectResponse:
-    if not request.session.get("admin"):
-        return RedirectResponse(url="/admin/login", status_code=302)
-    settings = get_settings()
-    uid = parse_participant_scan_token(t.strip())
-    if uid is None:
-        request.session["flash"] = "Недействительная ссылка начисления."
-        return RedirectResponse(url="/admin/scan", status_code=302)
-    user = await session.get(User, uid)
-    if not user or not is_web_user(user):
-        request.session["flash"] = "Участник не найден или не веб-профиль."
-        return RedirectResponse(url="/admin/scan", status_code=302)
+class AwardFromQrJsonBody(BaseModel):
+    t: str = ""
+    amount_feb: int = Field(ge=1)
+    idempotency_key: str = ""
 
-    raw = (amount_feb or "").strip()
-    try:
-        award_amount = int(raw)
-    except ValueError:
-        request.session["flash"] = "Укажите целое число ФЭБарт."
-        return RedirectResponse(url="/scan?" + urlencode({"t": t.strip()}), status_code=302)
 
-    if award_amount < 1:
-        request.session["flash"] = "Сумма начисления должна быть не меньше 1 ФЭБарт."
-        return RedirectResponse(url="/scan?" + urlencode({"t": t.strip()}), status_code=302)
-    if award_amount > settings.max_qr_award_feb:
-        request.session["flash"] = f"Слишком много: максимум {settings.max_qr_award_feb} ФЭБарт за одно начисление."
-        return RedirectResponse(url="/scan?" + urlencode({"t": t.strip()}), status_code=302)
-
-    tx = await apply_participant_scan_reward(
-        session,
-        user,
-        award_amount,
-        note=f"Скан QR, начислено {award_amount} ФЭБарт",
-    )
-    await session.flush()
+async def _append_qr_award_sheet_log_async(settings, outcome: QrAwardOk) -> None:
+    if outcome.replay:
+        return
+    u = outcome.user
+    tx = outcome.tx
     try:
         await append_log_row_async(
             settings,
             when=datetime.now(timezone.utc),
-            telegram_id=user.telegram_id,
-            username=user.username,
-            full_name=user.full_name,
+            telegram_id=u.telegram_id,
+            username=u.username,
+            full_name=u.full_name,
             delta=tx.delta,
             balance_after=tx.balance_after,
             kind="interactive_reward",
@@ -171,10 +149,99 @@ async def admin_award_from_qr(
     except Exception:
         logger.exception("sheets log (award QR)")
 
-    request.session["flash"] = (
-        f"Начислено {award_amount} ФЭБарт — {user.full_name}. Баланс: {user.balance_feb}. Сканируйте следующий билет."
+
+@router.post("/admin/award-from-qr")
+async def admin_award_from_qr(
+    request: Request,
+    session: DbSession,
+    t: str = Form(...),
+    amount_feb: str = Form(...),
+    idempotency_key: str = Form(""),
+) -> RedirectResponse:
+    if not request.session.get("admin"):
+        return RedirectResponse(url="/admin/login", status_code=302)
+    settings = get_settings()
+    raw = (amount_feb or "").strip()
+    try:
+        award_amount = int(raw)
+    except ValueError:
+        request.session["flash"] = "Укажите целое число ФЭБарт."
+        return RedirectResponse(url="/scan?" + urlencode({"t": t.strip()}), status_code=302)
+
+    out = await admin_try_award_from_qr(
+        session,
+        token=t,
+        award_amount=award_amount,
+        idempotency_key=idempotency_key,
     )
+    if isinstance(out, str):
+        if "Недействительная" in out or "не найден" in out or "веб-профиль" in out:
+            request.session["flash"] = out
+            return RedirectResponse(url="/admin/scan", status_code=302)
+        request.session["flash"] = out
+        return RedirectResponse(url="/scan?" + urlencode({"t": t.strip()}), status_code=302)
+
+    await _append_qr_award_sheet_log_async(settings, out)
+    if out.replay:
+        request.session["flash"] = (
+            f"Это начисление уже было сохранено ранее (повтор запроса). "
+            f"{out.user.full_name}: баланс {out.user.balance_feb} ФЭБарт. Можно сканировать следующий билет."
+        )
+    else:
+        request.session["flash"] = (
+            f"Начислено {award_amount} ФЭБарт — {out.user.full_name}. "
+            f"Баланс: {out.user.balance_feb}. Сканируйте следующий билет."
+        )
     return RedirectResponse(url="/admin/scan", status_code=302)
+
+
+@router.post("/admin/api/award-from-qr")
+async def admin_api_award_from_qr(
+    request: Request,
+    session: DbSession,
+    body: AwardFromQrJsonBody,
+) -> JSONResponse:
+    if not request.session.get("admin"):
+        return JSONResponse({"ok": False, "error": "auth", "message": "Нужен вход в админку."}, status_code=401)
+    if not (body.t or "").strip():
+        return JSONResponse(
+            {"ok": False, "error": "validation", "message": "Не указан код из QR."},
+            status_code=400,
+        )
+    settings = get_settings()
+    mx = settings.max_qr_award_feb
+    if body.amount_feb > mx:
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": "validation",
+                "message": f"Слишком много: максимум {mx} ФЭБарт за одно начисление.",
+            },
+            status_code=400,
+        )
+    out = await admin_try_award_from_qr(
+        session,
+        token=body.t,
+        award_amount=body.amount_feb,
+        idempotency_key=body.idempotency_key,
+    )
+    if isinstance(out, str):
+        code = "validation"
+        status = 400
+        if "Недействительная" in out or "не найден" in out or "веб-профиль" in out:
+            code = "token"
+            status = 400
+        return JSONResponse({"ok": False, "error": code, "message": out}, status=status)
+    await _append_qr_award_sheet_log_async(settings, out)
+    return JSONResponse(
+        {
+            "ok": True,
+            "duplicate": out.replay,
+            "amount_feb": body.amount_feb,
+            "balance_after": out.user.balance_feb,
+            "full_name": out.user.full_name,
+        }
+    )
 
 
 @router.get("/admin/", response_class=HTMLResponse)
@@ -269,6 +336,62 @@ async def admin_cabinet_banners_upload(
         return RedirectResponse(url="/admin/cabinet-banners", status_code=302)
     request.session["flash"] = f"Картинка для дня {day} сохранена."
     return RedirectResponse(url="/admin/cabinet-banners", status_code=302)
+
+
+@router.get("/admin/feedback", response_class=HTMLResponse)
+async def admin_feedback_get(
+    request: Request,
+    session: DbSession,
+    day: int = Query(1, ge=1, le=3),
+) -> HTMLResponse:
+    await ensure_feedback_slots(session)
+    slots = await load_all_slots(session)
+    responses = await list_responses_for_day(session, day)
+    response_items = [
+        {"row": r, "pairs": format_answers_for_admin(day, r.answers_json)}
+        for r in responses
+    ]
+    return templates.TemplateResponse(
+        "admin/feedback.html",
+        _ctx(
+            request,
+            slots=slots,
+            active_tab=day,
+            response_items=response_items,
+            max_qr_award_feb=get_settings().max_qr_award_feb,
+        ),
+    )
+
+
+@router.post("/admin/feedback/slot")
+async def admin_feedback_slot_post(
+    request: Request,
+    session: DbSession,
+    day: int = Form(...),
+    is_open: str = Form(...),
+    reward_feb: int = Form(0),
+    title: str = Form(""),
+) -> RedirectResponse:
+    if day not in (1, 2, 3):
+        request.session["flash"] = "День должен быть 1, 2 или 3."
+        return RedirectResponse(url="/admin/feedback", status_code=302)
+    await ensure_feedback_slots(session)
+    slot = await session.get(FeedbackSurveySlot, day)
+    if not slot:
+        request.session["flash"] = "Слот анкеты не найден."
+        return RedirectResponse(url="/admin/feedback", status_code=302)
+    slot.is_open = (is_open or "").strip() == "1"
+    mx = get_settings().max_qr_award_feb
+    try:
+        rw = int(reward_feb)
+    except (TypeError, ValueError):
+        rw = 0
+    slot.reward_feb = max(0, min(rw, mx))
+    raw_t = (title or "").strip()
+    slot.title = raw_t[:512] if raw_t else None
+    await session.flush()
+    request.session["flash"] = f"Анкета «День {day}» обновлена."
+    return RedirectResponse(url=f"/admin/feedback?day={day}", status_code=302)
 
 
 @router.get("/admin/scan", response_class=HTMLResponse)

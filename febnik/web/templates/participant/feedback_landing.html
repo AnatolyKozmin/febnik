@@ -1,0 +1,37 @@
+{% extends "participant/base.html" %}
+{% block title %}Обратная связь — ФЭБник{% endblock %}
+{% block content %}
+<div class="feb-card">
+  <h1 style="font-size:1.2rem;margin-bottom:0.5rem;">Анкеты обратной связи</h1>
+  <p class="feb-muted" style="margin:0 0 1rem 0;font-size:0.95rem;">Три анкеты по дням: оценки по шкале и открытые вопросы. За заполнение можно получить ФЭБарт — если оргкомитет включил награду для этого дня.</p>
+  {% if flash_cabinet %}
+  <div class="feb-flash" style="margin-bottom:1rem;">{{ flash_cabinet }}</div>
+  {% endif %}
+  <div style="display:flex;flex-direction:column;gap:0.65rem;">
+    {% for d in [1, 2, 3] %}
+    {% set s = slots[d] %}
+    <div style="border:1px solid var(--feb-border);border-radius:14px;padding:1rem;background:rgba(255,255,255,0.75);">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:0.75rem;flex-wrap:wrap;">
+        <div>
+          <strong>День {{ d }}</strong>
+          {% if s.title %}
+          <p class="feb-muted" style="margin:0.25rem 0 0;font-size:0.9rem;">{{ s.title }}</p>
+          {% endif %}
+        </div>
+        {% if done[d] %}
+        <span class="feb-muted" style="font-size:0.9rem;">✓ Отправлено</span>
+        {% elif s.is_open %}
+        <a class="feb-btn feb-btn-accent" href="/cabinet/feedback/{{ d }}" style="text-decoration:none;padding:0.45rem 0.9rem;font-size:0.95rem;">Заполнить</a>
+        {% else %}
+        <span class="feb-muted" style="font-size:0.9rem;">Пока закрыто</span>
+        {% endif %}
+      </div>
+      {% if s.is_open and not done[d] and s.reward_feb > 0 %}
+      <p class="feb-muted" style="margin:0.5rem 0 0;font-size:0.88rem;">За прохождение — до {{ s.reward_feb }} ФЭБарт.</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  <p style="margin-top:1.25rem;"><a href="/cabinet">← В кабинет</a></p>
+</div>
+{% endblock %}

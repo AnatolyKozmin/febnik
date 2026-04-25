@@ -24,6 +24,12 @@ def _ctx(request: Request, **extra: object):
     return {"request": request, "panel_url": panel_base_url(), **extra}
 
 
+@router.get("/health")
+async def health() -> Response:
+    """Для прокси и Docker healthcheck (без БД)."""
+    return Response(content="ok\n", media_type="text/plain")
+
+
 @router.get("/favicon.ico")
 async def favicon_ico() -> Response:
     return Response(

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-SurveyFieldKind = Literal["rating", "text"]
+SurveyFieldKind = Literal["rating", "text", "choice"]
 
 
 @dataclass(frozen=True)
@@ -15,6 +15,11 @@ class SurveyField:
     label: str
     required: bool = True
     placeholder: str = ""
+    # Шкала для kind=="rating" (включительно)
+    rating_min: int = 1
+    rating_max: int = 10
+    # Для kind=="choice": ровно два варианта ответа
+    choice_options: tuple[str, str] | None = None
 
 
 @dataclass(frozen=True)
@@ -100,12 +105,82 @@ DAY1_CLOSING = (
     "Набирайся сил, а мы увидимся завтра :)"
 )
 
-# ——— Дни 2 и 3: те же вопросы; отличается только финальный текст. Пришлёшь отдельные формулировки — правим здесь. ———
-DAY2_CLOSING = (
-    "Спасибо за второй день проекта и за честные ответы! "
-    "Отдохни и до встречи завтра."
+# ——— День 2 ———
+DAY2_FIELDS: tuple[SurveyField, ...] = (
+    SurveyField(
+        "lift_organizers",
+        "choice",
+        "Понравился ли тебе подъём участников организаторами?",
+        choice_options=("Да", "Нет, мне было некомфортно"),
+    ),
+    SurveyField(
+        "morning_warmup",
+        "rating",
+        "Как ты оцениваешь организацию и проведение зарядки? (оценка от 0 до 10)",
+        rating_min=0,
+        rating_max=10,
+    ),
+    SurveyField(
+        "station_quest",
+        "text",
+        "Понравилось ли тебе проведение станционного квеста? Что было не так?",
+        placeholder="Твой ответ",
+    ),
+    SurveyField(
+        "show_interactives",
+        "text",
+        "Понравилось ли тебе проведение шоу-интерактивов (НеИгры, Большое Шоу, Большая Мафия)? Что было не так?",
+        placeholder="Твой ответ",
+    ),
+    SurveyField(
+        "evening_party",
+        "text",
+        "Как ты оцениваешь организацию и проведение вечёрки от 1 до 10? (Ответ текстом)",
+        placeholder="Твой ответ",
+    ),
+    SurveyField(
+        "guitar",
+        "rating",
+        "Как ты оцениваешь гитарник? (Если ты не был(а) на нём, можешь пропустить вопрос)",
+        required=False,
+        rating_min=0,
+        rating_max=10,
+    ),
+    SurveyField(
+        "organizers",
+        "rating",
+        "Оцени работу организаторов (помощь с навигацией, оперативное реагирование на запросы, ответы на вопросы)?",
+        rating_min=0,
+        rating_max=10,
+    ),
+    SurveyField(
+        "liked_today",
+        "text",
+        "Что тебе больше всего понравилось/запомнилось сегодня?",
+        placeholder="Твой ответ",
+    ),
+    SurveyField(
+        "improve",
+        "text",
+        "Что тебе НЕ понравилось/что хотелось бы изменить?",
+        placeholder="Твой ответ",
+    ),
+    SurveyField(
+        "wishes",
+        "text",
+        "Если у тебя осталось, что сказать или пожелать организаторам, то можешь сделать это здесь",
+        required=False,
+        placeholder="Необязательно",
+    ),
 )
 
+DAY2_CLOSING = (
+    "Вот и ещё один день прошёл, это твоя последняя ночь в Лесном Озере...\n"
+    "Надеемся, что за этот день ты унёс с собой море воспоминаний!\n"
+    "До встречи завтра)"
+)
+
+# ——— День 3: пока тот же набор, что день 1; финальный текст отдельно ———
 DAY3_CLOSING = (
     "Это был финальный день — огромное спасибо, что провели это время с нами! "
     "Береги себя и до новых встреч."
@@ -113,7 +188,7 @@ DAY3_CLOSING = (
 
 SURVEY_BY_DAY: dict[int, SurveyDay] = {
     1: SurveyDay(1, DAY1_FIELDS, DAY1_CLOSING),
-    2: SurveyDay(2, DAY1_FIELDS, DAY2_CLOSING),
+    2: SurveyDay(2, DAY2_FIELDS, DAY2_CLOSING),
     3: SurveyDay(3, DAY1_FIELDS, DAY3_CLOSING),
 }
 
@@ -138,8 +213,17 @@ def validate_survey_answers(day: int, data: dict[str, object]) -> str | None:
                 n = int(raw)
             except (TypeError, ValueError):
                 return "Некорректная оценка по шкале."
-            if n < 1 or n > 10:
-                return "Оценка должна быть от 1 до 10."
+            if n < f.rating_min or n > f.rating_max:
+                return f"Оценка должна быть от {f.rating_min} до {f.rating_max}."
+        elif f.kind == "choice":
+            opts = f.choice_options
+            if not opts or len(opts) != 2:
+                return "Ошибка конфигурации анкеты (обратитесь к администратору)."
+            s = (str(raw) if raw is not None else "").strip()
+            if f.required and (not s or s not in opts):
+                return f"Выберите вариант: {f.label[:50]}…"
+            if s and s not in opts:
+                return "Некорректный вариант ответа."
         else:
             s = (str(raw) if raw is not None else "").strip()
             if f.required and not s:
@@ -157,8 +241,15 @@ def normalize_survey_answers(day: int, data: dict[str, object]) -> dict[str, str
     for f in spec.fields:
         raw = data.get(f.id)
         if f.kind == "rating":
+            if (raw is None or raw == "") and not f.required:
+                continue
             n = int(raw)
             out[f.id] = n
+        elif f.kind == "choice":
+            s = (str(raw) if raw is not None else "").strip()
+            if not s and not f.required:
+                continue
+            out[f.id] = s
         else:
             s = (str(raw) if raw is not None else "").strip()
             if not s and not f.required:
@@ -193,12 +284,18 @@ def format_answers_for_admin(day: int, answers_json: str | None) -> list[tuple[s
     for f in spec.fields:
         v = data.get(f.id)
         if v is None or v == "":
-            if f.kind == "text" and not f.required:
+            if f.kind in ("text",) and not f.required:
+                continue
+            if f.kind == "rating" and not f.required:
+                continue
+            if f.kind == "choice" and not f.required:
                 continue
             rows.append((f.label, "—"))
             continue
         if f.kind == "rating":
-            rows.append((f.label, f"{v} / 10"))
+            rows.append((f.label, f"{v} (шкала {f.rating_min}–{f.rating_max})"))
+        elif f.kind == "choice":
+            rows.append((f.label, str(v)))
         else:
             rows.append((f.label, str(v)))
     return rows

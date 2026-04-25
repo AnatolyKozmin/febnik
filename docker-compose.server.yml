@@ -1,6 +1,12 @@
 # На сервере (рядом с arkadium-edge-nginx, сеть arkadium_shared):
 #   docker compose -f docker-compose.yml -f docker-compose.server.yml up -d --build
 #
+# 502 Bad Gateway у nginx: контейнер febnik не слушает 8080 или неверный upstream.
+#   • docker compose logs febnik --tail 80
+#   • docker inspect febnik --format '{{.State.Health.Status}}'
+#   • Nginx в Docker-сети arkadium_shared: proxy_pass http://febnik:8080; (имя сервиса + внутренний порт)
+#   • Nginx на хосте: proxy_pass http://127.0.0.1:18081; (порт из ports ниже)
+#
 # Локально этот файл не подключай.
 
 services:

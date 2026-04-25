@@ -1,8 +1,10 @@
 import asyncio
 import logging
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
+from pydantic import ValidationError
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
@@ -98,4 +100,15 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except ValidationError as e:
+        print(
+            "\nОшибка настроек окружения (.env / переменные Docker):\n"
+            f"{e}\n\n"
+            "Частые причины:\n"
+            "  • BOT_ENABLED=true, но пустой или неверный BOT_TOKEN\n"
+            "  • одновременно WEB_ENABLED=false и BOT_ENABLED=false\n",
+            file=sys.stderr,
+        )
+        raise SystemExit(1) from e

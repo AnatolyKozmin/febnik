@@ -97,6 +97,42 @@
     font-size: 0.98rem;
     line-height: 1.45;
     color: var(--feb-text);
+    white-space: pre-line;
+  }
+  .feb-choice-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 0.35rem;
+  }
+  .feb-choice-btn {
+    width: 100%;
+    padding: 0.85rem 1rem;
+    border-radius: 12px;
+    border: 1.5px solid var(--feb-border);
+    background: rgba(255, 255, 255, 0.95);
+    font: inherit;
+    font-weight: 600;
+    font-size: 0.98rem;
+    line-height: 1.35;
+    cursor: pointer;
+    text-align: left;
+    color: var(--feb-text);
+    -webkit-tap-highlight-color: transparent;
+    transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  }
+  .feb-choice-btn:hover {
+    border-color: rgba(105, 9, 11, 0.35);
+  }
+  .feb-choice-btn.is-on {
+    border-color: var(--feb-bordeaux);
+    background: linear-gradient(145deg, rgba(215, 135, 164, 0.28), rgba(250, 251, 211, 0.55));
+    box-shadow: 0 2px 12px rgba(105, 9, 11, 0.12);
+  }
+  .feb-hearts--many .feb-heart-btn {
+    flex: 1 1 calc(9% - 0.15rem);
+    min-width: 2rem;
+    max-width: 2.85rem;
   }
 </style>
 <div class="feb-card">
@@ -118,12 +154,21 @@
     <input type="hidden" name="answers_json" id="feb-answers-json" value="">
     <div class="feb-survey-stack">
       {% for field in feedback_fields %}
-      {% if field.kind == 'rating' %}
-      <div class="feb-survey-q feb-rate-block" data-field-id="{{ field.id }}">
+      {% if field.kind == 'choice' and field.choice_options %}
+      <div class="feb-survey-q feb-choice-block" data-field-id="{{ field.id }}">
+        <span id="label-{{ field.id }}" style="display:block;font-weight:600;font-size:0.98rem;margin-bottom:0.65rem;">{{ field.label }}</span>
+        <div class="feb-choice-row" role="radiogroup" aria-labelledby="label-{{ field.id }}">
+          {% for opt in field.choice_options %}
+          <button type="button" class="feb-choice-btn" data-value="{{ opt }}" aria-pressed="false">{{ opt }}</button>
+          {% endfor %}
+        </div>
+      </div>
+      {% elif field.kind == 'rating' %}
+      <div class="feb-survey-q feb-rate-block{% if not field.required %} feb-rate-block--optional{% endif %}" data-field-id="{{ field.id }}"{% if not field.required %} data-optional="1"{% endif %}>
         <label id="label-{{ field.id }}">{{ field.label }}</label>
-        <div class="feb-hearts" role="radiogroup" aria-labelledby="label-{{ field.id }}">
-          {% for i in range(1, 11) %}
-          <button type="button" class="feb-heart-btn" data-value="{{ i }}" aria-label="Оценка {{ i }} из 10" aria-pressed="false">
+        <div class="feb-hearts{% if (field.rating_max - field.rating_min) >= 9 %} feb-hearts--many{% endif %}" role="radiogroup" aria-labelledby="label-{{ field.id }}">
+          {% for i in range(field.rating_min, field.rating_max + 1) %}
+          <button type="button" class="feb-heart-btn" data-value="{{ i }}" aria-label="Оценка {{ i }}, шкала {{ field.rating_min }}–{{ field.rating_max }}" aria-pressed="false">
             <span class="feb-heart-glyph" aria-hidden="true">♥</span>
             <span class="feb-heart-num">{{ i }}</span>
           </button>
@@ -179,21 +224,54 @@
       });
     });
   });
+  form.querySelectorAll(".feb-choice-block").forEach(function (block) {
+    var buttons = block.querySelectorAll(".feb-choice-btn");
+    var selected = null;
+    function paintCh() {
+      buttons.forEach(function (btn) {
+        var v = btn.getAttribute("data-value");
+        var on = selected !== null && v === selected;
+        btn.classList.toggle("is-on", on);
+        btn.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+    }
+    buttons.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        selected = btn.getAttribute("data-value");
+        paintCh();
+      });
+    });
+  });
   form.addEventListener("submit", function (e) {
     var answers = {};
     var missing = false;
     form.querySelectorAll(".feb-rate-block").forEach(function (block) {
       var id = block.getAttribute("data-field-id");
+      var optional = block.getAttribute("data-optional");
       var on = block.querySelector(".feb-heart-btn.is-on");
       if (!on) {
-        missing = true;
+        if (!optional) missing = true;
         return;
       }
       answers[id] = parseInt(on.getAttribute("data-value"), 10);
     });
     if (missing) {
       e.preventDefault();
-      alert("Пожалуйста, поставь оценку во всех вопросах со шкалой от 1 до 10.");
+      alert("Заполни обязательные вопросы: шкалы, выбор варианта и текстовые поля.");
+      return;
+    }
+    form.querySelectorAll(".feb-choice-block").forEach(function (block) {
+      var id = block.getAttribute("data-field-id");
+      var on = block.querySelector(".feb-choice-btn.is-on");
+      if (!on) {
+        missing = true;
+        return;
+      }
+      answers[id] = on.getAttribute("data-value") || "";
+    });
+    if (missing) {
+      e.preventDefault();
+      alert("Заполни обязательные вопросы: шкалы, выбор варианта и текстовые поля.");
       return;
     }
     form.querySelectorAll("textarea.feb-survey-text").forEach(function (ta) {

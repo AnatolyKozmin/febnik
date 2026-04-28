@@ -8,6 +8,7 @@ from urllib.parse import urlencode
 
 from fastapi import APIRouter, File, Form, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from openpyxl import Workbook
 from pydantic import BaseModel, Field
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
@@ -750,4 +751,50 @@ async def export_balances_csv(session: DbSession) -> Response:
         content=data,
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": 'attachment; filename="balances.csv"'},
+    )
+
+
+@router.get("/admin/export/participants.xlsx")
+async def export_participants_xlsx(session: DbSession) -> Response:
+    """Выгрузка всех пользователей в Excel (без секретных полей вроде PIN)."""
+    r = await session.execute(select(User).order_by(User.full_name))
+    users = r.scalars().all()
+    wb = Workbook()
+    ws = wb.active
+    assert ws is not None
+    ws.title = "Участники"
+    ws.append(
+        [
+            "ID",
+            "ФИО",
+            "Email",
+            "Студбилет",
+            "Username (TG)",
+            "Telegram ID",
+            "Роль",
+            "ФЭБарт",
+            "Создан (UTC)",
+        ]
+    )
+    for u in users:
+        ws.append(
+            [
+                u.id,
+                u.full_name,
+                u.email or "",
+                u.student_ticket or "",
+                u.username or "",
+                int(u.telegram_id),
+                u.role.value,
+                u.balance_feb,
+                u.created_at.replace(tzinfo=None) if u.created_at else None,
+            ]
+        )
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return Response(
+        content=buf.read(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="participants.xlsx"'},
     )

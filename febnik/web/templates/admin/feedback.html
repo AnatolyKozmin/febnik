@@ -48,6 +48,15 @@
     <a href="/admin/feedback?day={{ d }}" class="btn {% if active_tab == d %}btn-sm{% else %}btn-secondary btn-sm{% endif %}" style="text-decoration:none;">День {{ d }}</a>
     {% endfor %}
   </div>
+  <form method="post" action="/admin/feedback/export-google" style="margin-bottom:0.65rem;">
+    <input type="hidden" name="day" value="{{ active_tab }}">
+    <button type="submit" class="btn btn-secondary btn-sm" {% if not feedback_google_configured %}disabled title="Добавьте GOOGLE_CREDENTIALS_PATH и GOOGLE_SPREADSHEET_ID в .env и установите gspread"{% endif %}>Выгрузить день {{ active_tab }} в Google Таблицу</button>
+  </form>
+  <p class="muted" style="font-size:0.85rem;margin-bottom:1rem;line-height:1.45;">
+    Отдельный лист в той же книге: <strong>{{ feedback_sheet_tab_title }}</strong> (префикс задаётся в <code>SHEET_FEEDBACK_TAB_PREFIX</code>).
+    Первая строка — заголовки с текстами вопросов; дальше по одной строке на ответ. При каждой выгрузке лист очищается и заполняется заново.
+    {% if not feedback_google_configured %}<br><strong style="color:var(--danger, #b42318);">Google не настроен</strong> — задайте сервисный аккаунт и ID таблицы, см. <code>requirements-google.txt</code>.{% endif %}
+  </p>
   {% if not response_items %}
   <p class="muted">Пока нет ответов за день {{ active_tab }}.</p>
   {% else %}

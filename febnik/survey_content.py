@@ -333,3 +333,64 @@ def format_answers_for_admin(day: int, answers_json: str | None) -> list[tuple[s
         else:
             rows.append((f.label, str(v)))
     return rows
+
+
+def feedback_sheet_header_row(day: int) -> list[str]:
+    """Заголовки столбцов для выгрузки ОС в Google Таблицу (один лист = один день)."""
+    spec = get_survey_day(day)
+    if not spec:
+        return []
+    return [
+        "Время (UTC)",
+        "ФИО",
+        "Email",
+        "Студбилет",
+        *[f.label for f in spec.fields],
+    ]
+
+
+def feedback_answer_cells_for_row(day: int, answers_json: str | None) -> list[str]:
+    """Значения только по полям анкеты (в порядке spec.fields), для одной строки листа."""
+    spec = get_survey_day(day)
+    if not spec:
+        return []
+    n = len(spec.fields)
+    if not answers_json:
+        return [""] * n
+    import json
+
+    try:
+        data = json.loads(answers_json)
+    except json.JSONDecodeError:
+        return ["(неверный JSON)"] + [""] * max(0, n - 1)
+    if not isinstance(data, dict):
+        return ["(не объект JSON)"] + [""] * max(0, n - 1)
+    leg = data.get("_legacy_v1")
+    if isinstance(leg, dict):
+        vals = [
+            str(leg.get("answer_liked", "")),
+            str(leg.get("answer_improve", "")),
+            str(leg.get("answer_extra", "")),
+        ]
+        while len(vals) < n:
+            vals.append("")
+        return [_truncate_sheet_cell(v) for v in vals[:n]]
+    out: list[str] = []
+    for f in spec.fields:
+        v = data.get(f.id)
+        if v is None or v == "":
+            out.append("")
+            continue
+        if f.kind == "rating":
+            out.append(_truncate_sheet_cell(f"{v} (шкала {f.rating_min}–{f.rating_max})"))
+        else:
+            out.append(_truncate_sheet_cell(str(v)))
+    return out
+
+
+def _truncate_sheet_cell(text: str, max_len: int = 49000) -> str:
+    """Google Sheets лимит на ячейку ~50k; запас."""
+    t = text if isinstance(text, str) else str(text)
+    if len(t) <= max_len:
+        return t
+    return t[: max_len - 1] + "…"

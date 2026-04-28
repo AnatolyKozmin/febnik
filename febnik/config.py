@@ -28,8 +28,6 @@ class Settings(BaseSettings):
     sheet_activities: str = "Интерактивы"
     sheet_prizes: str = "Призы"
     sheet_log: str = "Лог_операций"
-    # Вкладки выгрузки ОС: «{prefix} 1» … «{prefix} 3» в той же книге, что и GOOGLE_SPREADSHEET_ID
-    sheet_feedback_tab_prefix: str = "ОС день"
 
     org_telegram_ids: str = ""
     handout_telegram_ids: str = ""

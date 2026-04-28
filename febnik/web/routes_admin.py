@@ -1,4 +1,3 @@
-import asyncio
 import csv
 import io
 import logging
@@ -34,11 +33,7 @@ from febnik.services.balance import (
     reject_balance_request,
 )
 from febnik.services.qr_award import QrAwardOk, admin_try_award_from_qr
-from febnik.services.sheets import (
-    append_log_row_async,
-    export_feedback_day_to_sheet_async,
-    feedback_sheet_tab_title,
-)
+from febnik.services.sheets import append_log_row_async
 from febnik.services.telegram_notify import send_user_message
 from febnik.services.cabinet_banners import (
     all_day_banner_urls,
@@ -51,7 +46,11 @@ from febnik.services.feedback_survey import (
     list_responses_for_day,
     load_all_slots,
 )
-from febnik.survey_content import format_answers_for_admin
+from febnik.survey_content import (
+    feedback_answer_cells_for_row,
+    feedback_sheet_header_row,
+    format_answers_for_admin,
+)
 from febnik.services.user_web import normalize_student_ticket_optional
 from febnik.web.deps import DbSession, panel_base_url
 
@@ -357,7 +356,6 @@ async def admin_feedback_get(
         {"row": r, "pairs": format_answers_for_admin(day, r.answers_json)}
         for r in responses
     ]
-    settings = get_settings()
     return templates.TemplateResponse(
         "admin/feedback.html",
         _ctx(
@@ -365,11 +363,7 @@ async def admin_feedback_get(
             slots=slots,
             active_tab=day,
             response_items=response_items,
-            max_qr_award_feb=settings.max_qr_award_feb,
-            feedback_google_configured=bool(
-                settings.google_credentials_path and settings.google_spreadsheet_id
-            ),
-            feedback_sheet_tab_title=feedback_sheet_tab_title(settings, day),
+            max_qr_award_feb=get_settings().max_qr_award_feb,
         ),
     )
 
@@ -405,42 +399,40 @@ async def admin_feedback_slot_post(
     return RedirectResponse(url=f"/admin/feedback?day={day}", status_code=302)
 
 
-@router.post("/admin/feedback/export-google")
-async def admin_feedback_export_google(
-    request: Request,
+@router.get("/admin/export/feedback-day.xlsx")
+async def export_feedback_day_xlsx(
     session: DbSession,
-    day: int = Form(...),
-) -> RedirectResponse:
-    if day not in (1, 2, 3):
-        request.session["flash"] = "День должен быть 1, 2 или 3."
-        return RedirectResponse(url="/admin/feedback", status_code=302)
-    settings = get_settings()
+    day: int = Query(1, ge=1, le=3),
+) -> Response:
+    """Excel выгрузка ответов ОС за один день (заголовки = тексты вопросов)."""
+    header = feedback_sheet_header_row(day)
+    if not header:
+        return Response(content="Нет анкеты для этого дня.", media_type="text/plain; charset=utf-8", status_code=404)
     responses = await list_responses_for_day(session, day)
     responses_sorted = sorted(
         responses,
         key=lambda r: (r.created_at.timestamp() if r.created_at else 0.0, r.id),
     )
-    row_tuples: list[tuple[datetime | None, str, str, str, str | None]] = []
+    wb = Workbook()
+    ws = wb.active
+    assert ws is not None
+    ws.title = f"День {day}"
+    ws.append(header)
     for r in responses_sorted:
         u = r.user
         if u is None:
             continue
-        row_tuples.append(
-            (
-                r.created_at,
-                u.full_name,
-                u.email or "",
-                u.student_ticket or "",
-                r.answers_json,
-            )
-        )
-    err = await export_feedback_day_to_sheet_async(settings, day, row_tuples)
-    tab = feedback_sheet_tab_title(settings, day)
-    if err:
-        request.session["flash"] = f"Google: {err}"
-    else:
-        request.session["flash"] = f"Выгружено {len(row_tuples)} ответ(ов) на вкладку «{tab}»."
-    return RedirectResponse(url=f"/admin/feedback?day={day}", status_code=302)
+        ca = r.created_at.replace(tzinfo=None) if r.created_at else None
+        ans = feedback_answer_cells_for_row(day, r.answers_json)
+        ws.append([ca, u.full_name, u.email or "", u.student_ticket or "", *ans])
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return Response(
+        content=buf.read(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="feedback_day_{day}.xlsx"'},
+    )
 
 
 @router.get("/admin/scan", response_class=HTMLResponse)
